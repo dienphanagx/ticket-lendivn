@@ -1,0 +1,9 @@
+node_modules/
+coverage/
+pnpm-lock.yaml
+src/types/api*.gen.d.ts
+src/styles/tokens.css
+.next/
+out/
+dist/
+public/

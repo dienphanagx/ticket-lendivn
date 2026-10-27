@@ -1,0 +1,13 @@
+# Setting pnpm của riêng app web (không phải workspace root).
+# Chặn bản phát hành chưa đủ 14 ngày (20160 phút) khi resolve dependency.
+minimumReleaseAge: 20160
+minimumReleaseAgeExclude:
+  # Vá GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr (RCE), GHSA-p3m5-59mp-jv5r (DoS) trong next ≤ 16.4.0,
+  # phát hành 2026-10-14; gỡ khi bản đủ 14 ngày (từ 2026-10-28).
+  - next@16.4.1
+  - eslint-config-next@16.4.1
+  # Package con cùng release (`@next/env`, `@next/swc-*`, `@next/eslint-plugin-next`) do next pin đúng bản, cũng chưa đủ tuổi.
+  - '@next/*'
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
