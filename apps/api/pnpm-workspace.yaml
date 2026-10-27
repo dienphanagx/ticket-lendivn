@@ -1,0 +1,7 @@
+# Setting pnpm của riêng app (không phải workspace ở root).
+# Chặn bản phát hành chưa đủ 14 ngày (20160 phút) khi resolve dependency.
+minimumReleaseAge: 20160
+
+# esbuild (qua tsx, vitest) lấy binary từ optionalDependencies theo platform; postinstall chỉ là kiểm tra
+ignoredBuiltDependencies:
+  - esbuild
