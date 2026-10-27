@@ -1,0 +1,110 @@
+name: ticket
+
+# Stack chạy local cho bài test. `docker compose up` chỉ chạy db, api, web.
+#   tunnel   → profile `tunnel` (ngrok, nhận IPN của VNPay):  docker compose --profile tunnel up
+#   api-test → profile `test` (Vitest trên DB ticket_test):    docker compose --profile test run --rm api-test
+# Base không publish port (port host khai ở docker-compose.override.yml, bind 127.0.0.1).
+# Biến lấy từ .env root (tạo từ .env.example); mỗi service nhận biến qua `environment:` bên dưới.
+
+services:
+  db:
+    container_name: ticket-db
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?thiếu POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?thiếu POSTGRES_DB}
+    volumes:
+      # postgres:18 đặt PGDATA theo version bên trong /var/lib/postgresql
+      - pgdata:/var/lib/postgresql
+      # Chỉ chạy khi volume trống: tạo thêm DB `ticket_test`
+      - ./scripts/sql/create-test-db.sql:/docker-entrypoint-initdb.d/10-create-test-db.sql:ro
+    healthcheck:
+      # -h 127.0.0.1 ép TCP: server tạm của bước init chỉ nghe unix socket, nên chưa báo healthy khi init script chưa xong
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    container_name: ticket-api
+    build:
+      context: ./apps/api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:?thiếu DATABASE_URL}
+      # Key bên thứ ba: rỗng thì api vẫn khởi động (specs/architecture.md § Dịch Vụ Ngoài)
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-}
+      VNPAY_QUERY_URL: ${VNPAY_QUERY_URL:-}
+      VNPAY_RETURN_URL_BASE: ${VNPAY_RETURN_URL_BASE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Đổi sang /health/ready khi api có readiness (specs/architecture.md § Môi Trường Deploy)
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/health']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  web:
+    container_name: ticket-web
+    build:
+      context: ./apps/web
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+      # Base URL của api trong mạng compose, gồm prefix /api
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8080/api}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+
+  # Tunnel HTTPS domain cố định vào api:8080 để VNPay gửi IPN. Chỉ chạy khi bật profile `tunnel`.
+  # Không dùng `${VAR:?}` ở đây: compose nội suy cả service ngoài profile, `up` mặc định sẽ fail khi chưa có token.
+  tunnel:
+    profiles: [tunnel]
+    container_name: ticket-tunnel
+    image: ngrok/ngrok:3
+    command: ['http', '--domain=${NGROK_DOMAIN:-}', 'api:8080']
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Vitest trên DB `ticket_test` (tên DB ghi literal ở đây, không lấy từ .env, để test không bao giờ trỏ DB dev `ticket`).
+  # Chạy: docker compose --profile test run --rm api-test
+  api-test:
+    profiles: [test]
+    build:
+      context: ./apps/api
+      target: test
+    environment:
+      APP_ENV: development
+      PORT: 8080
+      LOG_LEVEL: warn
+      DATABASE_URL: postgres://${POSTGRES_USER:?thiếu POSTGRES_USER}:${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD}@db:5432/ticket_test
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-}
+      VNPAY_QUERY_URL: ${VNPAY_QUERY_URL:-}
+      VNPAY_RETURN_URL_BASE: ${VNPAY_RETURN_URL_BASE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

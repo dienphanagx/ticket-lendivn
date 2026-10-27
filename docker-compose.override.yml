@@ -1,0 +1,8 @@
+# Port dev, tự merge khi chạy `docker compose` không truyền -f. Chỉ bind loopback.
+services:
+  api:
+    ports:
+      - '127.0.0.1:8080:8080'
+  web:
+    ports:
+      - '127.0.0.1:3000:3000'

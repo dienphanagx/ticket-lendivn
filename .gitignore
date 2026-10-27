@@ -4,3 +4,22 @@ CLAUDE.md
 ORCHESTRATION.md
 SCENARIOS.md
 .figma-cache
+
+# IDE + OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs root
+/*.log
+
+# Artifact agent/tooling ở root
+/.playwright-mcp/
+
+# Env files root, chỉ commit .env.example
+/.env
+/.env.*
+!/.env.example
