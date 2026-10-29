@@ -105,3 +105,52 @@ export async function insertPaymentTransaction(
 ): Promise<void> {
   await db.insertInto('payment_transactions').values(values).execute();
 }
+
+/** Đơn kèm URL thanh toán đã lưu (nếu có), cho tạo URL thanh toán. */
+export async function findOrderForPaymentUrl(db: Database, orderId: string) {
+  return db
+    .selectFrom('orders')
+    .select([
+      'id',
+      'status',
+      'buyer_total as buyerTotal',
+      'hold_expires_at as holdExpiresAt',
+      'payment_url as paymentUrl',
+    ])
+    .where('id', '=', orderId)
+    .executeTakeFirst();
+}
+
+export type PaymentUrlOrder = NonNullable<Awaited<ReturnType<typeof findOrderForPaymentUrl>>>;
+
+export interface PaymentUrlValues {
+  paymentUrl: string;
+  /** Đúng chuỗi `yyyyMMddHHmmss` GMT+7 đã ký trong URL; `querydr` gửi lại nguyên chuỗi này. */
+  vnpCreateDate: string;
+}
+
+/**
+ * Ghi URL lần đầu: chỉ khi chưa có URL và đơn còn `PENDING_PAYMENT` chưa quá hạn (trigger
+ * `order_guard_transition` chặn ghi lại). Trả `false` khi luồng khác đã ghi trước hoặc đơn đã đổi.
+ */
+export async function savePaymentUrl(
+  db: Database,
+  orderId: string,
+  { paymentUrl, vnpCreateDate }: PaymentUrlValues,
+): Promise<boolean> {
+  const row = await db
+    .updateTable('orders')
+    .set({
+      payment_url: paymentUrl,
+      vnp_create_date: vnpCreateDate,
+      payment_url_created_at: now,
+      updated_at: now,
+    })
+    .where('id', '=', orderId)
+    .where('payment_url', 'is', null)
+    .where('status', '=', OrderStatus.PENDING_PAYMENT)
+    .where('hold_expires_at', '>', now)
+    .returning('id')
+    .executeTakeFirst();
+  return row !== undefined;
+}

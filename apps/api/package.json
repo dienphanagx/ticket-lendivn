@@ -10,7 +10,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"{src,test}/**/*.{ts,json}\" \"*.{ts,js,json}\"",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts"
+    "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts",
+    "ipn:send": "tsx --env-file-if-exists=.env src/scripts/send-ipn.ts"
   },
   "packageManager": "pnpm@10.34.6",
   "type": "module",

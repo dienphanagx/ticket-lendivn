@@ -210,6 +210,7 @@ function orderViews(db: Database, filter: OrderFilter) {
       'o.hold_expires_at as holdExpiresAt',
       'o.paid_at as paidAt',
       'o.payment_url as paymentUrl',
+      'o.vnp_create_date as vnpCreateDate',
     ]);
 }
 

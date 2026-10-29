@@ -36,7 +36,8 @@ function signData(entries: Iterable<readonly [string, string]>): string {
 
 export const buildSignData = (params: VnpayParams): string => signData(Object.entries(params));
 
-const hmacHex = (data: string, secret: string): string =>
+/** HMAC-SHA512 hex chữ thường của `data`. */
+export const hmacHex = (data: string, secret: string): string =>
   createHmac(HMAC_ALGORITHM, secret).update(data, 'utf8').digest(HEX_ENCODING);
 
 /** Chữ ký hex chữ thường cho bộ tham số (dùng cho URL thanh toán, script gửi IPN, test). */
@@ -44,9 +45,26 @@ export const signVnpayParams = (params: VnpayParams, secret: string): string =>
   hmacHex(buildSignData(params), secret);
 
 /**
- * Xác thực chữ ký trên tham số đã giải mã (query Fastify), không dùng chuỗi query thô.
+ * So `providedHash` (hex, không phân biệt hoa thường) với HMAC-SHA512 của `data` bằng phép so sánh
+ * thời gian hằng; sai dạng (không phải 128 hex) → false. Dùng chung cho mọi chuỗi ký của VNPay.
+ */
+export function matchesVnpayHash(data: string, providedHash: string, secret: string): boolean {
+  const normalized = providedHash.toLowerCase();
+  if (!SECURE_HASH_PATTERN.test(normalized)) {
+    return false;
+  }
+  const expected = Buffer.from(hmacHex(data, secret), HEX_ENCODING);
+  // Cùng độ dài 64 byte (đã kiểm 128 hex) → so sánh thời gian hằng
+  return timingSafeEqual(Buffer.from(normalized, HEX_ENCODING), expected);
+}
+
+/**
+ * Xác thực chữ ký trên tham số đã giải mã (query / body), không dùng chuỗi tham số thô.
  * Sai khi: chưa cấu hình khoá, thiếu / sai dạng `vnp_SecureHash`, một tham số `vnp_*` xuất hiện nhiều
- * lần (parser trả mảng), hoặc HMAC lệch. Tham số không có tiền tố `vnp_` bị bỏ qua.
+ * lần (parser trả mảng) hoặc không phải chuỗi, hoặc HMAC lệch. Tham số không có tiền tố `vnp_` bị bỏ qua.
+ *
+ * Thử 2 kiểu chuỗi ký: (1) mọi tham số `vnp_*`, kể cả giá trị rỗng; (2) nếu (1) sai và có tham số rỗng,
+ * bỏ các tham số `vnp_*` rỗng khỏi chuỗi ký (một số mẫu code của VNPay ký như vậy).
  */
 export function verifyVnpaySignature(query: unknown, secret: string | undefined): boolean {
   if (secret === undefined || secret === '' || typeof query !== 'object' || query === null) {
@@ -62,14 +80,18 @@ export function verifyVnpaySignature(query: unknown, secret: string | undefined)
       return false;
     }
     if (key === VNP_SECURE_HASH) {
-      providedHash = value.toLowerCase();
+      providedHash = value;
     }
     entries.push([key, value]);
   }
-  if (providedHash === undefined || !SECURE_HASH_PATTERN.test(providedHash)) {
+  if (providedHash === undefined) {
     return false;
   }
-  const expected = Buffer.from(hmacHex(signData(entries), secret), HEX_ENCODING);
-  // Cùng độ dài 64 byte (đã kiểm 128 hex) → so sánh thời gian hằng
-  return timingSafeEqual(Buffer.from(providedHash, HEX_ENCODING), expected);
+  if (matchesVnpayHash(signData(entries), providedHash, secret)) {
+    return true;
+  }
+  const nonEmpty = entries.filter(([, value]) => value !== '');
+  return (
+    nonEmpty.length !== entries.length && matchesVnpayHash(signData(nonEmpty), providedHash, secret)
+  );
 }

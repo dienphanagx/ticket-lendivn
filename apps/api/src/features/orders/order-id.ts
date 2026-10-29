@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
+import * as z from 'zod';
+
 // Mã đơn 16 ký tự [A-Z0-9] = `yyMMdd` (GMT+7) + 10 ký tự ngẫu nhiên; khớp CHECK `orders_id_format_ck`
 // và dùng làm `vnp_TxnRef` (specs/database.md § `orders`).
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -28,3 +30,14 @@ export function generateOrderId(now: Date = new Date()): string {
   const datePart = gmt7.toISOString().slice(ISO_DATE_START, ISO_DATE_END).replaceAll('-', '');
   return datePart + randomPart();
 }
+
+// Dạng mã đơn client gửi lên (spec api § C Xem Trạng Thái Đơn Hàng → Kiểm tra dữ liệu)
+const ORDER_ID_PATTERN = /^[A-Za-z0-9]+$/;
+const ORDER_ID_MIN_LENGTH = 12;
+const ORDER_ID_MAX_LENGTH = 20;
+
+export const orderIdSchema = z
+  .string()
+  .min(ORDER_ID_MIN_LENGTH)
+  .max(ORDER_ID_MAX_LENGTH)
+  .regex(ORDER_ID_PATTERN);

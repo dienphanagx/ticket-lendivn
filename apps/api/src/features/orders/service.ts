@@ -142,14 +142,36 @@ export async function expireOrders(db: Database): Promise<number> {
   return total;
 }
 
-/** Hết hạn tại chỗ rồi đọc; chưa tra cứu cổng (thuộc phần thanh toán). */
-export async function getOrder(db: Database, orderId: string) {
-  await expireOverdueOrders(db, { orderId });
+/** Tra cứu cổng cho đơn chờ đã có URL; `true` = đã xử lý kết quả cuối → đọc lại đơn. */
+export type SyncPendingPayment = (order: {
+  orderId: string;
+  vnpCreateDate: string;
+}) => Promise<boolean>;
+
+async function readOrder(db: Database, orderId: string) {
   const order = await findOrderView(db, orderId);
   if (order === undefined) {
     throw new AppError(ORDER_ERRORS.NOT_FOUND);
   }
   return order;
+}
+
+/**
+ * Hết hạn tại chỗ rồi đọc; đơn `PENDING_PAYMENT` (đã hết hạn tại chỗ nên còn hạn) có URL thanh toán
+ * → tra cứu cổng 1 lần, ngoài transaction DB, rồi đọc lại nếu cổng có kết quả cuối.
+ */
+export async function getOrder(db: Database, orderId: string, syncPayment?: SyncPendingPayment) {
+  await expireOverdueOrders(db, { orderId });
+  const order = await readOrder(db, orderId);
+  if (
+    syncPayment === undefined ||
+    order.status !== OrderStatus.PENDING_PAYMENT ||
+    order.vnpCreateDate === null
+  ) {
+    return order;
+  }
+  const settled = await syncPayment({ orderId: order.id, vnpCreateDate: order.vnpCreateDate });
+  return settled ? readOrder(db, orderId) : order;
 }
 
 export interface ListOrdersInput extends PageParams {

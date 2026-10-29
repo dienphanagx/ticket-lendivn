@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -153,5 +155,58 @@ describe('verifyVnpaySignature', () => {
 
   it('should reject a query that is not an object', () => {
     expect(verifyVnpaySignature(null, SECRET)).toBe(false);
+  });
+});
+
+describe('verifyVnpaySignature — empty vnp_ params', () => {
+  // Chuỗi ký viết tay cho cả 2 kiểu, HMAC tính trực tiếp bằng node:crypto (không qua code app)
+  const WITH_EMPTY =
+    'vnp_Amount=110000000&vnp_BankCode=&vnp_OrderInfo=Thanh+toan+don+261029ABCDEFGH12' +
+    '&vnp_PayDate=&vnp_ResponseCode=00&vnp_TmnCode=TESTTMN1' +
+    '&vnp_TransactionNo=14000001&vnp_TransactionStatus=00&vnp_TxnRef=261029ABCDEFGH12';
+  const WITHOUT_EMPTY =
+    'vnp_Amount=110000000&vnp_OrderInfo=Thanh+toan+don+261029ABCDEFGH12' +
+    '&vnp_ResponseCode=00&vnp_TmnCode=TESTTMN1' +
+    '&vnp_TransactionNo=14000001&vnp_TransactionStatus=00&vnp_TxnRef=261029ABCDEFGH12';
+  const hmac = (data: string) => createHmac('sha512', SECRET).update(data).digest('hex');
+  const query = (hash: string) => ({
+    ...PARAMS,
+    vnp_BankCode: '',
+    vnp_PayDate: '',
+    vnp_SecureHash: hash,
+  });
+
+  it('should keep empty values in the sign data', () => {
+    expect(buildSignData({ ...PARAMS, vnp_BankCode: '', vnp_PayDate: '' })).toBe(WITH_EMPTY);
+  });
+
+  it('should accept a signature computed over every vnp_ param including empty ones', () => {
+    expect(verifyVnpaySignature(query(hmac(WITH_EMPTY)), SECRET)).toBe(true);
+  });
+
+  it('should accept a signature computed with the empty vnp_ params left out', () => {
+    expect(verifyVnpaySignature(query(hmac(WITHOUT_EMPTY)), SECRET)).toBe(true);
+  });
+
+  it('should still reject a tampered signature in both modes', () => {
+    expect(verifyVnpaySignature(query(tamper(hmac(WITH_EMPTY))), SECRET)).toBe(false);
+    expect(verifyVnpaySignature(query(tamper(hmac(WITHOUT_EMPTY))), SECRET)).toBe(false);
+  });
+
+  it('should not let the fallback drop a non-empty param from the sign data', () => {
+    // Chữ ký chỉ phủ phần không có vnp_Amount → không mode nào chấp nhận
+    const rest: Record<string, string> = { ...PARAMS };
+    delete rest.vnp_Amount;
+    const partial = signVnpayParams(rest, SECRET);
+
+    expect(
+      verifyVnpaySignature({ ...PARAMS, vnp_BankCode: '', vnp_SecureHash: partial }, SECRET),
+    ).toBe(false);
+  });
+
+  it('should reject a repeated vnp_ param even when the fallback would match', () => {
+    const hash = hmac(WITHOUT_EMPTY);
+
+    expect(verifyVnpaySignature({ ...query(hash), vnp_PayDate: ['', ''] }, SECRET)).toBe(false);
   });
 });

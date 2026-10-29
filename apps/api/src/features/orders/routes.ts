@@ -1,3 +1,4 @@
+import type { FastifyBaseLogger } from 'fastify';
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import * as z from 'zod';
 
@@ -6,16 +7,14 @@ import { OrderStatus } from '../../db/enums.js';
 import { entityIdSchema } from '../../lib/ids.js';
 import { pageMetaSchema, paginationQuerySchema } from '../../lib/pagination.js';
 import { requiredUserHeaders, resolveCurrentUser, USER_ID_HEADER } from '../users/current-user.js';
+import { orderIdSchema } from './order-id.js';
 import type { OrderSnapshot } from './repository.js';
-import { createOrder, getOrder, listOrders } from './service.js';
+import { createOrder, getOrder, listOrders, type SyncPendingPayment } from './service.js';
 
 const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]+$/;
 const IDEMPOTENCY_KEY_MIN_LENGTH = 8;
 const IDEMPOTENCY_KEY_MAX_LENGTH = 64;
-const ORDER_ID_PATTERN = /^[A-Za-z0-9]+$/;
-const ORDER_ID_MIN_LENGTH = 12;
-const ORDER_ID_MAX_LENGTH = 20;
 const MIN_QUANTITY = 1;
 /** Gợi ý client hỏi lại khi đơn còn chờ xác nhận (spec api § C Xem Trạng Thái Đơn Hàng). */
 const RETRY_AFTER_SECONDS = 3;
@@ -98,8 +97,21 @@ function toDetailDto(order: OrderView) {
   };
 }
 
-/** `/v1/orders` (spec api § C Đơn Hàng); chưa gồm URL thanh toán / tra cứu cổng. */
-export const orderRoutes: FastifyPluginCallbackZod<{ db: Database }> = (app, { db }, done) => {
+export interface OrderRoutesOptions {
+  db: Database;
+  /** Tra cứu cổng khi xem đơn chờ; `undefined` = chưa cấu hình `querydr` → bỏ qua. */
+  syncPayment?: (
+    order: Parameters<SyncPendingPayment>[0],
+    log: FastifyBaseLogger,
+  ) => Promise<boolean>;
+}
+
+/** `/v1/orders` (spec api § C Đơn Hàng); URL thanh toán ở `paymentUrlRoutes`. */
+export const orderRoutes: FastifyPluginCallbackZod<OrderRoutesOptions> = (
+  app,
+  { db, syncPayment },
+  done,
+) => {
   app.post(
     '/v1/orders',
     {
@@ -161,17 +173,16 @@ export const orderRoutes: FastifyPluginCallbackZod<{ db: Database }> = (app, { d
     '/v1/orders/:orderId',
     {
       schema: {
-        params: z.object({
-          orderId: z
-            .string()
-            .min(ORDER_ID_MIN_LENGTH)
-            .max(ORDER_ID_MAX_LENGTH)
-            .regex(ORDER_ID_PATTERN),
-        }),
+        params: z.object({ orderId: orderIdSchema }),
         response: { 200: z.object({ data: orderDetailSchema }) },
       },
     },
-    async (request) => ({ data: toDetailDto(await getOrder(db, request.params.orderId)) }),
+    async (request) => {
+      const sync =
+        syncPayment &&
+        ((order: Parameters<SyncPendingPayment>[0]) => syncPayment(order, request.log));
+      return { data: toDetailDto(await getOrder(db, request.params.orderId, sync)) };
+    },
   );
   done();
 };

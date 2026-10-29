@@ -4,6 +4,16 @@ export const PAYMENT_ERRORS = {
     message: 'Payment amount does not match order total',
     httpStatus: 422,
   },
+  SIGNATURE_INVALID: {
+    code: 'PAYMENT_SIGNATURE_INVALID',
+    message: 'Payment signature is invalid',
+    httpStatus: 422,
+  },
+  GATEWAY_UNAVAILABLE: {
+    code: 'PAYMENT_GATEWAY_UNAVAILABLE',
+    message: 'Payment gateway is not configured',
+    httpStatus: 503,
+  },
 } as const;
 
 /**
