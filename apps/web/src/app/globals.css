@@ -1,9 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-/* CSS của vaul (Drawer) nạp tĩnh: bản vaul tự chèn bằng <style> không có nonce, bị CSP chặn (src/lib/csp.ts).
-   Package không export file này nên trỏ path thật */
-@import '../../node_modules/vaul/style.css';
 
 @custom-variant dark (&:is(.dark *));
 

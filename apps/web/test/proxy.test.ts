@@ -52,4 +52,12 @@ describe('proxy security headers', () => {
       second.headers.get('Content-Security-Policy'),
     );
   });
+
+  it('should forward the same nonce to the app through the x-nonce request header', () => {
+    const res = proxy(new NextRequest(new URL(ROUTES.HOME, 'http://localhost')));
+
+    const nonce = /'nonce-([^']+)'/.exec(res.headers.get('Content-Security-Policy') ?? '')?.[1];
+    expect(nonce).toBeDefined();
+    expect(res.headers.get('x-middleware-request-x-nonce')).toBe(nonce);
+  });
 });

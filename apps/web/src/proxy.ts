@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { buildCsp, buildSecurityHeaders } from '@/lib/csp';
+import { buildCsp, buildSecurityHeaders, NONCE_HEADER } from '@/lib/csp';
 
 // Không auth, không locale: proxy chỉ sinh CSP nonce + security header mỗi request
 export function proxy(request: NextRequest) {
@@ -9,7 +9,7 @@ export function proxy(request: NextRequest) {
 
   // Header REQUEST: Next parse nonce từ CSP để gắn vào script framework; x-nonce cho code app đọc lại
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set(NONCE_HEADER, nonce);
   requestHeaders.set('Content-Security-Policy', csp);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });

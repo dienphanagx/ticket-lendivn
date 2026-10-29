@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccountMenuProvider, useAccountMenu } from '@/components/providers/account-menu-provider';
+import { StyleNonce } from '@/components/providers/style-nonce';
 import type { EventListing } from '@/features/events/types';
 import { TicketPicker } from '@/features/listings/components/ticket-picker';
 
@@ -17,6 +18,15 @@ const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 const fetchMock = vi.fn<typeof fetch>();
+const TEST_NONCE = 'test-nonce';
+
+const stubViewport = (desktop: boolean) =>
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: desktop,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
 
 const otherListing = buildListing();
 const ownListing = buildListing({
@@ -35,6 +45,7 @@ function Providers({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return (
     <QueryClientProvider client={client}>
+      <StyleNonce nonce={TEST_NONCE} />
       <AccountMenuProvider>
         {children}
         <MenuProbe />
@@ -64,12 +75,7 @@ const panel = () => within(screen.getByRole('complementary'));
 
 beforeEach(() => {
   // Desktop (≥ 768px): khu chọn là khối cố định bên cạnh, không phải bottom sheet
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: true,
-    media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  }));
+  stubViewport(true);
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockImplementation(async (input) => {
     const quantity = Number(
@@ -237,5 +243,53 @@ describe('TicketPicker', () => {
     }
 
     expect(panel().getByRole('spinbutton', { name: 'Số lượng' })).toHaveValue(2);
+  });
+});
+
+describe('TicketPicker on mobile (< 768px)', () => {
+  beforeEach(() => stubViewport(false));
+
+  it('should open the selection in a bottom sheet dialog', async () => {
+    renderPicker([otherListing], USER_A);
+
+    await userEvent.setup().click(itemOf('Bình').getByRole('button', { name: 'Chọn' }));
+
+    const sheet = within(screen.getByRole('dialog', { name: 'Chọn số lượng vé' }));
+    expect(sheet.getByRole('spinbutton', { name: 'Số lượng' })).toHaveValue(1);
+    expect(await sheet.findByText('1.375.000 ₫')).toBeVisible();
+  });
+
+  it('should only inject style tags carrying the CSP nonce while the sheet is open', async () => {
+    renderPicker([otherListing], USER_A);
+
+    await userEvent.setup().click(itemOf('Bình').getByRole('button', { name: 'Chọn' }));
+
+    const styles = [...document.head.querySelectorAll('style')];
+    expect(styles.length).toBeGreaterThan(0); // react-remove-scroll khoá cuộn nền
+    for (const style of styles) expect(style).toHaveAttribute('nonce', TEST_NONCE);
+  });
+
+  it('should clear the selection on Escape and return focus to the select button', async () => {
+    const user = userEvent.setup();
+    renderPicker([otherListing], USER_A);
+    const selectButton = itemOf('Bình').getByRole('button', { name: 'Chọn' });
+    await user.click(selectButton);
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(selectButton).toHaveFocus();
+    await user.click(selectButton);
+    expect(screen.getByRole('spinbutton', { name: 'Số lượng' })).toHaveValue(1);
+  });
+
+  it('should close the sheet with the close button', async () => {
+    const user = userEvent.setup();
+    renderPicker([otherListing], USER_A);
+    await user.click(itemOf('Bình').getByRole('button', { name: 'Chọn' }));
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });
