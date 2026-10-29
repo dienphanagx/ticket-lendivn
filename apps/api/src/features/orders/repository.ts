@@ -186,6 +186,20 @@ export async function expireOverdueOrders(db: Database, filter: OrderFilter): Pr
   return rows.length;
 }
 
+/**
+ * Kết thúc sự kiện: mọi đơn `PENDING_PAYMENT` của sự kiện (còn hạn hay quá hạn) → `EXPIRED`. Khoá đơn
+ * theo `ORDER BY id` như job và hết hạn tại chỗ, để 2 câu khoá nhiều đơn không chờ vòng nhau.
+ */
+export async function expirePendingOrdersOfEvent(db: Database, eventId: string): Promise<number> {
+  const ids = ordersMatching(db, { status: OrderStatus.PENDING_PAYMENT })
+    .select('o.id')
+    .where('o.event_id', '=', eventId)
+    .orderBy('o.id')
+    .forUpdate();
+  const rows = await expireOrdersIn(db, ids).execute();
+  return rows.length;
+}
+
 function orderViews(db: Database, filter: OrderFilter) {
   return ordersMatching(db, filter)
     .innerJoin('events as e', 'e.id', 'o.event_id')

@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 
 import type { Database } from '../../db/client.js';
-import { LedgerAccountType, OrderStatus, type EventStatus } from '../../db/enums.js';
+import { EventStatus, LedgerAccountType, OrderStatus } from '../../db/enums.js';
 import { listingsWithAvailability } from '../listings/repository.js';
 
 /** Tồn kho theo sự kiện: số tin, tổng vé còn lại, giá thấp nhất trong các tin còn vé. */
@@ -83,6 +83,38 @@ export async function findEventBySlug(db: Database, slug: string) {
     .select([...EVENT_COLUMNS, 'e.description'])
     .where('e.slug', '=', slug)
     .executeTakeFirst();
+}
+
+/**
+ * Khoá cấp 1 FOR UPDATE của kết thúc sự kiện: chờ mọi tạo đơn / ghi nhận đang giữ FOR SHARE của sự
+ * kiện commit, chặn luồng mới tới khi transaction kết thúc (specs/database.md § Chống bán trùng).
+ */
+export async function lockEventForUpdate(db: Database, eventId: string) {
+  return db
+    .selectFrom('events')
+    .select(['id', 'name', 'status', 'completed_at as completedAt'])
+    .where('id', '=', eventId)
+    .forUpdate()
+    .executeTakeFirst();
+}
+
+/** `COMPLETED` + thời điểm kết thúc; trigger `event_guard_transition` chặn chiều ngược lại. */
+export async function markEventCompleted(db: Database, eventId: string): Promise<Date> {
+  const row = await db
+    .updateTable('events')
+    .set({
+      status: EventStatus.COMPLETED,
+      completed_at: sql<Date>`now()`,
+      updated_at: sql<Date>`now()`,
+    })
+    .where('id', '=', eventId)
+    .returning('completed_at as completedAt')
+    .executeTakeFirstOrThrow();
+  if (row.completedAt === null) {
+    // CHECK `events_completed_at_ck` bảo đảm không xảy ra
+    throw new Error(`Event ${eventId} completed without completed_at`);
+  }
+  return row.completedAt;
 }
 
 /** Tin bán của sự kiện: giá tăng dần, cùng giá thì tin còn nhiều vé hơn trước (spec api § B). */

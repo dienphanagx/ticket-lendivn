@@ -5,4 +5,9 @@ export const LEDGER_ERRORS = {
     message: 'Ledger transaction is unbalanced',
     httpStatus: 500,
   },
+  ACCOUNT_NOT_FOUND: {
+    code: 'LEDGER_ACCOUNT_NOT_FOUND',
+    message: 'Ledger account not found',
+    httpStatus: 404,
+  },
 } as const;

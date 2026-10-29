@@ -5,6 +5,8 @@ import type { LedgerLine, LedgerPosting } from './service.js';
 // Bút toán theo sự kiện nghiệp vụ thanh toán (spec api § E Ghi Bút Toán); số tiền lấy từ snapshot đơn.
 
 const PAYMENT_KEY_PREFIX = 'PAYMENT:';
+/** Khớp CHECK `ledger_transactions_release_key_ck` (`idempotency_key LIKE 'EVENT_RELEASE:%'`). */
+const EVENT_RELEASE_KEY_PREFIX = 'EVENT_RELEASE:';
 const DESCRIPTION_MAX_LENGTH = 255;
 const DESCRIPTION_SEPARATOR = ' · ';
 
@@ -13,18 +15,32 @@ const GATEWAY_CASH: LedgerAccountKey = {
   ownerUserId: null,
   eventId: null,
 };
+const PLATFORM_FEE_REVENUE: LedgerAccountKey = {
+  type: LedgerAccountType.PLATFORM_FEE_REVENUE,
+  ownerUserId: null,
+  eventId: null,
+};
 
 /** 1 giao dịch cổng → tối đa 1 giao dịch sổ cái, dùng chung cho `PAYMENT_CAPTURED` và `PAYMENT_REFUND_REQUIRED`. */
 export const paymentIdempotencyKey = (gatewayTxnNo: string): string =>
   `${PAYMENT_KEY_PREFIX}${gatewayTxnNo}`;
 
-/** Cắt tên sự kiện theo code point để cả mô tả vừa varchar(255). */
-function describeSale(quantity: number, eventName: string, orderId: string): string {
-  const head = `Bán ${quantity} vé${DESCRIPTION_SEPARATOR}`;
-  const tail = `${DESCRIPTION_SEPARATOR}Đơn ${orderId}`;
+/** Cắt tên sự kiện theo code point để cả mô tả `head + tên + tail` vừa varchar(255). */
+function withEventName(head: string, eventName: string, tail = ''): string {
   const room = DESCRIPTION_MAX_LENGTH - [...head].length - [...tail].length;
   return head + [...eventName].slice(0, Math.max(room, 0)).join('') + tail;
 }
+
+const describeSale = (quantity: number, eventName: string, orderId: string): string =>
+  withEventName(
+    `Bán ${quantity} vé${DESCRIPTION_SEPARATOR}`,
+    eventName,
+    `${DESCRIPTION_SEPARATOR}Đơn ${orderId}`,
+  );
+
+/** 1 sự kiện → tối đa 1 giao dịch giải phóng ký quỹ. */
+export const eventReleaseIdempotencyKey = (eventId: string): string =>
+  `${EVENT_RELEASE_KEY_PREFIX}${eventId}`;
 
 export interface CapturedPayment {
   gatewayTxnNo: string;
@@ -103,3 +119,61 @@ export const paymentRefundRequiredPosting = (payment: RefundRequiredPayment): Le
     },
   ],
 });
+
+export interface SellerEscrowBalance {
+  sellerId: string;
+  /** Số dư `ESCROW_SELLER` (người bán, sự kiện) đọc từ sổ cái, > 0. */
+  amount: number;
+}
+
+export interface EscrowRelease {
+  eventId: string;
+  eventName: string;
+  sellers: readonly SellerEscrowBalance[];
+  /** Số dư `ESCROW_FEE` của sự kiện đọc từ sổ cái; 0 = không có dòng phí. */
+  feeAmount: number;
+}
+
+/**
+ * Sự kiện kết thúc: mỗi người bán Nợ `ESCROW_SELLER` / Có `SELLER_PAYABLE` toàn bộ số dư; phí Nợ
+ * `ESCROW_FEE` / Có `PLATFORM_FEE_REVENUE`. Số dư 0 không sinh dòng; không còn dòng nào → `undefined`
+ * (không tạo giao dịch).
+ */
+export function eventReleasePosting(release: EscrowRelease): LedgerPosting | undefined {
+  const lines: LedgerLine[] = release.sellers.flatMap(({ sellerId, amount }) => [
+    {
+      account: {
+        type: LedgerAccountType.ESCROW_SELLER,
+        ownerUserId: sellerId,
+        eventId: release.eventId,
+      },
+      direction: LedgerSide.DEBIT,
+      amount,
+    },
+    {
+      account: { type: LedgerAccountType.SELLER_PAYABLE, ownerUserId: sellerId, eventId: null },
+      direction: LedgerSide.CREDIT,
+      amount,
+    },
+  ]);
+  lines.push(
+    {
+      account: { type: LedgerAccountType.ESCROW_FEE, ownerUserId: null, eventId: release.eventId },
+      direction: LedgerSide.DEBIT,
+      amount: release.feeAmount,
+    },
+    { account: PLATFORM_FEE_REVENUE, direction: LedgerSide.CREDIT, amount: release.feeAmount },
+  );
+  const nonZero = lines.filter((line) => line.amount !== 0);
+  if (nonZero.length === 0) {
+    return undefined;
+  }
+  return {
+    type: LedgerTxnType.EVENT_RELEASE,
+    idempotencyKey: eventReleaseIdempotencyKey(release.eventId),
+    eventId: release.eventId,
+    orderId: null,
+    description: withEventName(`Giải phóng ký quỹ${DESCRIPTION_SEPARATOR}`, release.eventName),
+    lines: nonZero,
+  };
+}

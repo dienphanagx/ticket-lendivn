@@ -9,6 +9,7 @@ import {
 import type { Env } from './config/env.js';
 import type { Database } from './db/client.js';
 import { eventRoutes } from './features/events/routes.js';
+import { ledgerRoutes } from './features/ledger/routes.js';
 import { listingRoutes } from './features/listings/routes.js';
 import { orderRoutes } from './features/orders/routes.js';
 import { PaymentRecorder } from './features/payments/payment-recorder.js';
@@ -65,6 +66,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   await app.register(userRoutes, { prefix: API_PREFIX, db });
   await app.register(eventRoutes, { prefix: API_PREFIX, db });
   await app.register(listingRoutes, { prefix: API_PREFIX, db });
+  await app.register(ledgerRoutes, { prefix: API_PREFIX, db });
   const querydrGateway = resolveQuerydrGateway(config);
   const syncPayment =
     querydrGateway &&

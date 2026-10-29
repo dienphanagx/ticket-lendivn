@@ -4,7 +4,9 @@ import * as z from 'zod';
 import type { Database } from '../../db/client.js';
 import { EventStatus } from '../../db/enums.js';
 import { AppError } from '../../lib/app-error.js';
+import { entityIdSchema } from '../../lib/ids.js';
 import { optionalUserHeaders, resolveCurrentUser, USER_ID_HEADER } from '../users/current-user.js';
+import { completeEvent } from './completion.js';
 import { EVENT_ERRORS } from './errors.js';
 import { findEventBySlug, listEventListings, listEventsWithStats } from './repository.js';
 
@@ -50,6 +52,25 @@ const eventDetailResponse = z.object({
         isOwnListing: z.boolean(),
       }),
     ),
+  }),
+});
+
+const completionResponse = z.object({
+  data: z.object({
+    id: z.string(),
+    status: z.literal(EventStatus.COMPLETED),
+    completedAt: z.iso.datetime(),
+    expiredOrderCount: z.int(),
+    /** Σ tiền chuyển khỏi ký quỹ (người bán + phí sàn) = `escrowTotal` ngay trước khi kết thúc. */
+    releasedTotal: z.int(),
+    sellerReleases: z.array(
+      z.object({
+        seller: z.object({ id: z.string(), displayName: z.string() }),
+        amount: z.int(),
+      }),
+    ),
+    platformFeeAmount: z.int(),
+    ledgerTransactionId: z.string().nullable(),
   }),
 });
 
@@ -120,6 +141,35 @@ export const eventRoutes: FastifyPluginCallbackZod<{ db: Database }> = (app, { d
             seller: { id: sellerId, displayName: sellerName },
             isOwnListing: sellerId === currentUserId,
           })),
+        },
+      };
+    },
+  );
+
+  app.post(
+    '/v1/events/:eventId/complete',
+    {
+      schema: {
+        params: z.object({ eventId: entityIdSchema }),
+        response: { 200: completionResponse },
+      },
+    },
+    async (request) => {
+      const completion = await completeEvent(db, request.params.eventId, request.log);
+      const sellerTotal = completion.sellers.reduce((total, seller) => total + seller.amount, 0);
+      return {
+        data: {
+          id: completion.eventId,
+          status: EventStatus.COMPLETED,
+          completedAt: completion.completedAt.toISOString(),
+          expiredOrderCount: completion.expiredOrderCount,
+          releasedTotal: sellerTotal + completion.platformFeeAmount,
+          sellerReleases: completion.sellers.map(({ sellerId, displayName, amount }) => ({
+            seller: { id: sellerId, displayName },
+            amount,
+          })),
+          platformFeeAmount: completion.platformFeeAmount,
+          ledgerTransactionId: completion.ledgerTransactionId,
         },
       };
     },
