@@ -1,12 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 
-import { buildApp, type AppDeps } from '../../src/app.js';
+import { buildApp, type AppConfig, type AppDeps } from '../../src/app.js';
 import { AppEnv } from '../../src/config/env.js';
 import { createDb, type Database } from '../../src/db/client.js';
 
 /** Log `fatal` để output test gọn; mọi request đi qua `app.inject()`, không mở port. */
-export const buildTestApp = (deps: AppDeps): Promise<FastifyInstance> =>
-  buildApp({ APP_ENV: AppEnv.STAGING, LOG_LEVEL: 'fatal' }, deps);
+export const buildTestApp = (
+  deps: AppDeps,
+  config: Partial<AppConfig> = {},
+): Promise<FastifyInstance> =>
+  buildApp({ APP_ENV: AppEnv.STAGING, LOG_LEVEL: 'fatal', ...config }, deps);
 
 /**
  * Kysely trỏ port không có server: pool chỉ kết nối khi có query, nên dùng được cho test không

@@ -1,10 +1,15 @@
 import { Writable } from 'node:stream';
 
+import Fastify, { type FastifyBaseLogger } from 'fastify';
 import { pino } from 'pino';
 import { describe, expect, it } from 'vitest';
 
 import { AppEnv } from '../../src/config/env.js';
-import { buildLoggerOptions, REDACT_CENSOR } from '../../src/lib/logger.js';
+import {
+  buildLoggerOptions,
+  childLoggerWithoutQuery,
+  REDACT_CENSOR,
+} from '../../src/lib/logger.js';
 
 const SECRET_VALUE = 'x';
 const LOG_MESSAGE = 'redact probe';
@@ -54,5 +59,39 @@ describe('logger redact', () => {
 
     // Assert
     expect(line).toMatchObject({ orderId: 'ORDER1', a: { status: 'PAID' }, msg: LOG_MESSAGE });
+  });
+});
+
+describe('childLoggerWithoutQuery', () => {
+  /** Fastify thật với logger ghi vào bộ nhớ; trả `req.url` của dòng `incoming request` mỗi route. */
+  async function incomingUrls(paths: readonly string[]): Promise<unknown[]> {
+    const lines: string[] = [];
+    const sink = new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        lines.push(chunk.toString());
+        callback();
+      },
+    });
+    // Kiểu logger như app (`FastifyBaseLogger`), không phải `pino.Logger` đầy đủ
+    const loggerInstance: FastifyBaseLogger = pino(sink);
+    const app = Fastify({ loggerInstance });
+    app.get('/hidden', { childLoggerFactory: childLoggerWithoutQuery }, () => ({}));
+    app.get('/visible', () => ({}));
+    for (const path of paths) {
+      await app.inject({ method: 'GET', url: path });
+    }
+    await app.close();
+    return lines
+      .map((line) => JSON.parse(line) as { msg: string; req?: { url: string } })
+      .filter((line) => line.msg === 'incoming request')
+      .map((line) => line.req?.url);
+  }
+
+  it('should drop the query string from the request log of routes that opt in', async () => {
+    // Act
+    const urls = await incomingUrls(['/hidden?vnp_TmnCode=TMN1&vnp_Amount=1', '/visible?page=2']);
+
+    // Assert
+    expect(urls).toEqual(['/hidden', '/visible?page=2']);
   });
 });

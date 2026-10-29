@@ -11,13 +11,15 @@ import type { Database } from './db/client.js';
 import { eventRoutes } from './features/events/routes.js';
 import { listingRoutes } from './features/listings/routes.js';
 import { orderRoutes } from './features/orders/routes.js';
+import { vnpayIpnRoutes } from './features/payments/vnpay-ipn-routes.js';
 import { userRoutes } from './features/users/routes.js';
 import { registerErrorHandlers } from './lib/error-handler.js';
 import { buildLoggerOptions } from './lib/logger.js';
 import { REQUEST_ID_HEADER, resolveRequestId } from './lib/request-id.js';
 import { healthRoutes } from './routes/health.js';
 
-export type AppConfig = Pick<Env, 'APP_ENV' | 'LOG_LEVEL'>;
+/** `VNPAY_HASH_SECRET` thiếu = chưa cấu hình cổng; test truyền khoá giả. */
+export type AppConfig = Pick<Env, 'APP_ENV' | 'LOG_LEVEL' | 'VNPAY_HASH_SECRET'>;
 
 export interface AppDeps {
   /** Caller sở hữu vòng đời pool (tạo + `destroy()`); app chỉ dùng. */
@@ -52,6 +54,11 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   await app.register(eventRoutes, { prefix: API_PREFIX, db });
   await app.register(listingRoutes, { prefix: API_PREFIX, db });
   await app.register(orderRoutes, { prefix: API_PREFIX, db });
+  await app.register(vnpayIpnRoutes, {
+    prefix: API_PREFIX,
+    db,
+    hashSecret: config.VNPAY_HASH_SECRET,
+  });
 
   return app;
 }

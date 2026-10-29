@@ -1,6 +1,13 @@
 import { createRequire } from 'node:module';
 
-import { pino, type Logger, type LoggerOptions } from 'pino';
+import type { FastifyBaseLogger, FastifyRequest } from 'fastify';
+import {
+  pino,
+  type Bindings,
+  type ChildLoggerOptions,
+  type Logger,
+  type LoggerOptions,
+} from 'pino';
 
 import { AppEnv, type Env } from '../config/env.js';
 
@@ -55,6 +62,30 @@ export function buildLoggerOptions(env: Pick<Env, 'APP_ENV' | 'LOG_LEVEL'>): Log
     }),
   };
 }
+
+const QUERY_SEPARATOR = '?';
+
+export const serializeRequestWithoutQuery = (request: FastifyRequest) => ({
+  method: request.method,
+  url: request.url.split(QUERY_SEPARATOR, 1)[0],
+  host: request.host,
+  remoteAddress: request.ip,
+  remotePort: request.socket.remotePort,
+});
+
+/**
+ * `childLoggerFactory` của route: request log bỏ query string — cho route mà query mang tham số
+ * không được vào log (vd `vnp_TmnCode` của VNPay, specs/architecture.md § Monitoring & Observability).
+ */
+export const childLoggerWithoutQuery = (
+  logger: FastifyBaseLogger,
+  bindings: Bindings,
+  options: ChildLoggerOptions,
+): FastifyBaseLogger =>
+  logger.child(bindings, {
+    ...options,
+    serializers: { ...options.serializers, req: serializeRequestWithoutQuery },
+  });
 
 /** Logger cho script chạy ngoài Fastify (migrate, seed): cùng level, redact, format với server. */
 export function createScriptLogger(env: Pick<Env, 'APP_ENV' | 'LOG_LEVEL'>, name: string): Logger {

@@ -79,18 +79,41 @@ export async function lockListingForUpdate(db: Database, listingId: string) {
     .executeTakeFirst();
 }
 
+export interface ReservedQuantityOptions {
+  /** Loại 1 đơn khỏi phép đếm (đơn đang ghi nhận thanh toán tự quyết có giữ được vé hay không). */
+  excludeOrderId?: string;
+  /**
+   * Đếm hạn giữ chỗ theo giờ câu lệnh (`statement_timestamp()`, sau khi đã giữ khoá tin bán) thay vì
+   * giờ BEGIN (`now()`): đơn hết hạn trong lúc chờ khoá không bị tính thêm vào vé của đơn đã lấy lại
+   * chúng. Không nới an toàn: đơn bị bỏ đều đã hết hạn thật, đơn `PAID` luôn được đếm.
+   */
+  holdsAsOfStatement?: boolean;
+}
+
 /** Σ vé đơn `PAID` + `PENDING_PAYMENT` còn hạn giữ chỗ; đơn quá hạn mà job chưa chạy không bị tính. */
-export async function sumReservedQuantity(db: Database, listingId: string): Promise<number> {
-  const row = await db
+export async function sumReservedQuantity(
+  db: Database,
+  listingId: string,
+  { excludeOrderId, holdsAsOfStatement = false }: ReservedQuantityOptions = {},
+): Promise<number> {
+  let query = db
     .selectFrom('orders')
     .select(sql<number>`COALESCE(SUM(quantity), 0)::bigint`.as('reserved'))
-    .where('listing_id', '=', listingId)
+    .where('listing_id', '=', listingId);
+  if (excludeOrderId !== undefined) {
+    query = query.where('id', '<>', excludeOrderId);
+  }
+  const row = await query
     .where((eb) =>
       eb.or([
         eb('status', '=', OrderStatus.PAID),
         eb.and([
           eb('status', '=', OrderStatus.PENDING_PAYMENT),
-          eb('hold_expires_at', '>', sql<Date>`now()`),
+          eb(
+            'hold_expires_at',
+            '>',
+            holdsAsOfStatement ? sql<Date>`statement_timestamp()` : sql<Date>`now()`,
+          ),
         ]),
       ]),
     )
