@@ -44,8 +44,8 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      # Đổi sang /health/ready khi api có readiness (specs/architecture.md § Môi Trường Deploy)
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/health']
+      # Readiness kiểm DB (specs/architecture.md § Môi Trường Deploy)
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/health/ready']
       interval: 5s
       timeout: 5s
       retries: 10
