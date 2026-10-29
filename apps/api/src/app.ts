@@ -10,6 +10,7 @@ import type { Env } from './config/env.js';
 import type { Database } from './db/client.js';
 import { eventRoutes } from './features/events/routes.js';
 import { listingRoutes } from './features/listings/routes.js';
+import { orderRoutes } from './features/orders/routes.js';
 import { userRoutes } from './features/users/routes.js';
 import { registerErrorHandlers } from './lib/error-handler.js';
 import { buildLoggerOptions } from './lib/logger.js';
@@ -50,6 +51,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps): Promise<Fastif
   await app.register(userRoutes, { prefix: API_PREFIX, db });
   await app.register(eventRoutes, { prefix: API_PREFIX, db });
   await app.register(listingRoutes, { prefix: API_PREFIX, db });
+  await app.register(orderRoutes, { prefix: API_PREFIX, db });
 
   return app;
 }
