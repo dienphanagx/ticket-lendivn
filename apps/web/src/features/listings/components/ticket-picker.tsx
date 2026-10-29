@@ -16,6 +16,8 @@ import { ListingItem } from './listing-item';
 import { SelectionPanel } from './selection-panel';
 import { TicketSheet } from './ticket-sheet';
 
+const noop = () => undefined;
+
 interface TicketPickerProps {
   listings: EventListing[];
   eventOnSale: boolean;
@@ -24,7 +26,7 @@ interface TicketPickerProps {
 
 /** Danh sách tin bán + khu chọn số lượng / tạm tính (spec web § B Trang Sự Kiện, § C Chọn Vé) */
 export function TicketPicker({ listings, eventOnSale, currentUserId }: TicketPickerProps) {
-  const { setOpen: openAccountMenu } = useAccountMenu();
+  const { setOpen: openAccountMenu, checkoutPending } = useAccountMenu();
   const [state, setState] = useState(INITIAL_PICKER_STATE);
   // Đổi tài khoản / tải lại trang → props mới; chỉnh state ngay trong render (không qua effect)
   const [prevContext, setPrevContext] = useState<PickerContext>({
@@ -68,6 +70,8 @@ export function TicketPicker({ listings, eventOnSale, currentUserId }: TicketPic
     [],
   );
   const closeSilently = useCallback(() => close(null), [close]);
+  // Đang thanh toán: khoá đóng khu chọn để không bỏ dở giữa chừng lần bấm của tin đang chọn
+  const closeUnlessPaying = checkoutPending ? noop : closeSilently;
   const changeQuantity = (quantity: number | null) =>
     setState((s) => (s.selection ? { ...s, selection: { ...s.selection, quantity } } : s));
 
@@ -102,15 +106,18 @@ export function TicketPicker({ listings, eventOnSale, currentUserId }: TicketPic
                 listing={listing}
                 eventOnSale={eventOnSale}
                 selected={listing.id === selected?.id}
+                locked={checkoutPending}
                 onSelect={select}
               />
             ))}
           </ul>
         )}
       </section>
-      <TicketSheet open={selected !== undefined} onClose={closeSilently}>
+      <TicketSheet open={selected !== undefined} onClose={closeUnlessPaying}>
         {selected && selection && (
+          // key theo tin: lần bấm "Thanh toán" (mutation) không sống sang khu chọn của tin khác
           <SelectionPanel
+            key={selected.id}
             listing={selected}
             quantity={selection.quantity}
             currentUserId={currentUserId}

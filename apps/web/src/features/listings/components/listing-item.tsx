@@ -9,11 +9,14 @@ interface ListingItemProps {
   listing: EventListing;
   eventOnSale: boolean;
   selected: boolean;
+  /** Đang thanh toán tin khác → không đổi tin */
+  locked?: boolean;
   onSelect: (listing: EventListing) => void;
 }
 
 /** 1 tin bán: người bán, giá mỗi vé, số vé còn lại, nhãn, nút "Chọn" (spec web § B Trang Sự Kiện) */
-export function ListingItem({ listing, eventOnSale, selected, onSelect }: ListingItemProps) {
+export function ListingItem(props: ListingItemProps) {
+  const { listing, eventOnSale, selected, locked = false, onSelect } = props;
   const soldOut = eventOnSale && listing.availableQuantity === 0;
   const sellerId = `listing-${listing.id}-seller`;
   return (
@@ -42,7 +45,7 @@ export function ListingItem({ listing, eventOnSale, selected, onSelect }: Listin
         type="button"
         variant={selected ? 'default' : 'outline'}
         className="w-full sm:w-auto"
-        disabled={!eventOnSale || soldOut || listing.isOwnListing}
+        disabled={!eventOnSale || soldOut || listing.isOwnListing || locked}
         aria-describedby={sellerId}
         onClick={() => onSelect(listing)}
       >

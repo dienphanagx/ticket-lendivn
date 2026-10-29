@@ -10,7 +10,10 @@ export const listingKeys = {
     [...listingKeys.all, 'quote', listingId, quantity, userId] as const,
 };
 
-/** Bảng tạm tính; giữ số của lần trước (cùng tin bán) trong lúc tính lại để bảng không nhảy */
+/**
+ * Bảng tạm tính; giữ quote lần trước (cùng tin bán) trong lúc tính lại để query không về rỗng.
+ * Quote giữ lại là của số lượng cũ: UI chỉ hiện khi `quote.quantity` khớp số đang nhập (selection-panel.tsx)
+ */
 export const quoteQueryOptions = (listingId: string, quantity: number, userId: string) =>
   queryOptions({
     queryKey: listingKeys.quote(listingId, quantity, userId),

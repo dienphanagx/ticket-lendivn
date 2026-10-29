@@ -12,7 +12,9 @@ export const ROUTES = {
 
 // Route Handler BFF cho Client Component (TanStack Query)
 export const BFF_ROUTES = {
+  ORDERS: '/bff/orders',
   ORDER: (orderId: string) => `/bff/orders/${encodeURIComponent(orderId)}`,
+  ORDER_PAYMENT_URL: (orderId: string) => `/bff/orders/${encodeURIComponent(orderId)}/payment-url`,
   LISTING_QUOTE: (listingId: string) => `/bff/listings/${encodeURIComponent(listingId)}/quote`,
 } as const;
 

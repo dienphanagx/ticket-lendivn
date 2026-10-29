@@ -56,9 +56,62 @@ export const TICKET_MESSAGES = {
   BUYER_FEE: 'Phí dịch vụ (10%)',
   TOTAL: 'Tổng thanh toán',
   CHECKOUT: 'Thanh toán',
+  CHECKOUT_PENDING: 'Đang tạo đơn…',
   EMPTY_VALUE: '—',
   QUANTITY_REQUIRED: 'Vui lòng nhập số lượng',
   QUANTITY_MIN: 'Số lượng tối thiểu là 1',
+} as const;
+
+// specs/functional-spec/web.md § C Xác Nhận Thanh Toán — ngoại lệ khi bấm "Thanh toán"
+export const CHECKOUT_MESSAGES = {
+  ORDER_NOT_CREATED: 'Chưa tạo được đơn, vui lòng thử lại',
+  GATEWAY_UNREACHABLE: 'Không kết nối được cổng thanh toán, vui lòng thử lại sau',
+  REMAINING: (available: number) => `Chỉ còn ${available} vé, vui lòng chọn lại số lượng`,
+} as const;
+
+// specs/functional-spec/web.md § C Xem Kết Quả Thanh Toán, § D Xem Danh Sách Đơn Hàng
+export const ORDER_MESSAGES = {
+  RESULT_TITLE: 'Kết quả thanh toán',
+  LIST_TITLE: 'Đơn hàng',
+  NOT_FOUND: 'Không tìm thấy đơn hàng',
+  ORDER_ID: 'Mã đơn',
+  EVENT: 'Sự kiện',
+  SELLER: 'Người bán',
+  QUANTITY: 'Số lượng',
+  TICKET_COUNT: (count: number) => `${count} vé`,
+  UNIT_PRICE: 'Giá mỗi vé',
+  SUBTOTAL: 'Tiền vé',
+  BUYER_FEE: 'Phí dịch vụ',
+  TOTAL: 'Tổng thanh toán',
+  CREATED_AT: 'Thời điểm tạo đơn',
+  PAID_AT: 'Thời điểm thanh toán',
+  HOLD_UNTIL: (time: string) => `Giữ vé đến ${time}`,
+  STATUS_PAID: 'Đã thanh toán',
+  STATUS_PENDING: 'Đang chờ xác nhận',
+  STATUS_FAILED: 'Thất bại',
+  STATUS_EXPIRED: 'Hết hạn',
+  STATUS_REFUND_REQUIRED: 'Cần hoàn tiền',
+  PAID_TITLE: 'Thanh toán thành công',
+  PENDING_TITLE: 'Đang chờ xác nhận thanh toán từ cổng…',
+  FAILED_TITLE: 'Thanh toán không thành công. Vé đã được trả lại cho tin bán.',
+  EXPIRED_TITLE: 'Đơn đã hết hạn giữ chỗ. Vé đã được trả lại cho tin bán.',
+  REFUND_TITLE: (amount: string) =>
+    `Đã nhận thanh toán nhưng vé không còn đủ. ${amount} sẽ được hoàn lại và đang hiển thị ở số dư khả dụng của bạn.`,
+  POLL_TIMEOUT:
+    'Chưa nhận được xác nhận từ cổng thanh toán. Kết quả sẽ được cập nhật tại trang Đơn hàng.',
+  CHECK_AGAIN: 'Kiểm tra lại',
+  VIEW_ORDERS: 'Xem đơn hàng',
+  BACK_TO_EVENT: 'Quay lại sự kiện',
+  VIEW_ACCOUNT: 'Xem tài khoản',
+  EMPTY: 'Bạn chưa có đơn hàng nào',
+  BROWSE_EVENTS: 'Xem sự kiện',
+} as const;
+
+export const PAGINATION_MESSAGES = {
+  LABEL: 'Phân trang',
+  PREVIOUS: 'Trang trước',
+  NEXT: 'Trang sau',
+  STATUS: (page: number, totalPages: number) => `Trang ${page}/${totalPages}`,
 } as const;
 
 export const NAV_LABELS = {

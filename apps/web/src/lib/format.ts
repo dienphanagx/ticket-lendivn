@@ -21,12 +21,22 @@ const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   hourCycle: 'h23',
 });
 
-/** ISO 8601 → `dd/MM/yyyy HH:mm` giờ Asia/Ho_Chi_Minh */
-export function formatDateTime(iso: string): string {
+function dateParts(iso: string): Record<string, string> {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) throw new RangeError(`Invalid date: ${iso}`);
-  const parts = Object.fromEntries(
+  return Object.fromEntries(
     dateTimeFormat.formatToParts(date).map((part) => [part.type, part.value]),
   );
+}
+
+/** ISO 8601 → `dd/MM/yyyy HH:mm` giờ Asia/Ho_Chi_Minh */
+export function formatDateTime(iso: string): string {
+  const parts = dateParts(iso);
   return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+}
+
+/** ISO 8601 → `HH:mm` giờ Asia/Ho_Chi_Minh ("Giữ vé đến {HH:mm}") */
+export function formatTime(iso: string): string {
+  const parts = dateParts(iso);
+  return `${parts.hour}:${parts.minute}`;
 }

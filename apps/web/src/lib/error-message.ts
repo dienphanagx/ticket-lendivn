@@ -26,6 +26,11 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ERROR_CODES.LISTING_NOT_FOUND]: 'Tin bán không còn tồn tại',
   [ERROR_CODES.CANNOT_BUY_OWN_LISTING]: 'Bạn không thể mua tin bán của chính mình',
   [ERROR_CODES.INSUFFICIENT_QUANTITY]: 'Không đủ vé, vui lòng chọn lại số lượng',
+  [ERROR_CODES.ORDER_NOT_FOUND]: 'Không tìm thấy đơn hàng',
+  [ERROR_CODES.ORDER_NOT_PAYABLE]: 'Chưa tạo được đơn, vui lòng thử lại',
+  [ERROR_CODES.IDEMPOTENCY_KEY_REUSED]: 'Chưa tạo được đơn, vui lòng thử lại',
+  [ERROR_CODES.PAYMENT_GATEWAY_UNAVAILABLE]:
+    'Không kết nối được cổng thanh toán, vui lòng thử lại sau',
 };
 
 export const SOLD_OUT_MESSAGE = 'Tin bán này vừa hết vé';

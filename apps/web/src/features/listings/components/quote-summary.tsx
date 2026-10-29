@@ -6,6 +6,7 @@ import { formatVnd } from '@/lib/format';
 import type { Quote } from '../types';
 
 interface QuoteSummaryProps {
+  /** Chỉ quote của đúng số lượng đang nhập; chưa có → skeleton (đang tính) hoặc "—" */
   quote: Quote | undefined;
   /** Số lượng không hợp lệ → mọi ô hiện "—" */
   invalid: boolean;

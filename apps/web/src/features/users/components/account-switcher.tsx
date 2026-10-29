@@ -36,7 +36,7 @@ interface AccountSwitcherProps {
 type Notice = { text: string; autoHide: boolean };
 
 export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: AccountSwitcherProps) {
-  const { open, setOpen } = useAccountMenu();
+  const { open, setOpen, checkoutPending } = useAccountMenu();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -53,7 +53,8 @@ export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: Acc
 
   const choose = (userId: string) => {
     setOpen(false);
-    if (userId === currentUserId) return;
+    // Đang thanh toán: đổi cookie lúc này làm bước lấy URL cổng chạy dưới tài khoản khác
+    if (userId === currentUserId || checkoutPending) return;
     startTransition(async () => {
       const result = await selectUser(userId);
       if (result.success) {
@@ -72,9 +73,14 @@ export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: Acc
 
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={open && !checkoutPending} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" disabled={isPending} aria-busy={isPending} className="max-w-48">
+          <Button
+            variant="outline"
+            disabled={isPending || checkoutPending}
+            aria-busy={isPending}
+            className="max-w-48"
+          >
             <span className="truncate">{current?.displayName ?? ACCOUNT_MESSAGES.PLACEHOLDER}</span>
             <Icon name="chevron-down" />
           </Button>

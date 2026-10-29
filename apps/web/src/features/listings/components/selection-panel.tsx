@@ -1,19 +1,22 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
-import { Button } from '@/components/ui/button';
+import { useAccountMenu } from '@/components/providers/account-menu-provider';
 import { ERROR_CODES } from '@/constants/error-codes';
 import { TICKET_MESSAGES } from '@/constants/messages';
 import type { EventListing } from '@/features/events/types';
+import type { CheckoutOutcome } from '@/features/orders/checkout';
+import { useCheckout } from '@/features/orders/hooks/use-checkout';
 import { ERROR_MESSAGES, getUnknownErrorMessage } from '@/lib/error-message';
 import { AppError } from '@/lib/errors';
 import { formatVnd } from '@/lib/format';
 
 import { validateQuantity } from '../quantity';
 import { quoteQueryOptions } from '../queries';
+import { CheckoutAction } from './checkout-action';
 import { QuantityField } from './quantity-field';
 import { QuoteSummary } from './quote-summary';
 
@@ -46,6 +49,7 @@ function shouldClose(err: AppError): boolean {
 export function SelectionPanel(props: SelectionPanelProps) {
   const { listing, quantity, currentUserId, onQuantityChange, onClose } = props;
   const router = useRouter();
+  const { setOpen: openAccountMenu, setCheckoutPending } = useAccountMenu();
   const quantityError = validateQuantity(quantity, listing.availableQuantity);
   const valid = quantityError === null && quantity !== null;
   const query = useQuery({
@@ -64,6 +68,30 @@ export function SelectionPanel(props: SelectionPanelProps) {
     }
   }, [err, onClose, router]);
 
+  const handleOutcome = useCallback(
+    (outcome: CheckoutOutcome) => {
+      if (outcome.openAccountMenu) openAccountMenu(true);
+      if (outcome.close) onClose(outcome.message);
+      if (outcome.refresh) router.refresh();
+    },
+    [openAccountMenu, onClose, router],
+  );
+  const checkout = useCheckout({ listingId: listing.id, quantity, onOutcome: handleOutcome });
+  // Báo cho header / danh sách tin: khoá đổi tài khoản, đổi tin, đóng khu chọn khi đang thanh toán
+  useEffect(() => {
+    setCheckoutPending(checkout.pending);
+    return () => setCheckoutPending(false);
+  }, [checkout.pending, setCheckoutPending]);
+
+  // keepPreviousData giữ quote của số lượng cũ trong lúc tính lại: chỉ hiện quote đúng số đang nhập
+  const quote =
+    valid &&
+    !query.isPlaceholderData &&
+    query.data?.listingId === listing.id &&
+    query.data.quantity === quantity
+      ? query.data
+      : undefined;
+  const calculating = valid && currentUserId !== null && !query.isError && !quote;
   const quoteError =
     currentUserId === null
       ? ERROR_MESSAGES[ERROR_CODES.USER_NOT_SELECTED]
@@ -86,19 +114,22 @@ export function SelectionPanel(props: SelectionPanelProps) {
         value={quantity}
         max={listing.availableQuantity}
         error={quantityError}
+        disabled={checkout.pending}
         onChange={onQuantityChange}
       />
       <QuoteSummary
-        quote={query.data}
+        quote={quote}
         invalid={!valid}
-        loading={query.isFetching}
+        loading={calculating || (query.isFetching && valid)}
         error={quoteError}
         onRetry={retryable ? () => void query.refetch() : undefined}
       />
-      {/* Tạo đơn + chuyển sang VNPay làm ở batch W2; W1 chỉ hiển thị nút ở trạng thái khoá */}
-      <Button type="button" className="w-full" disabled>
-        {TICKET_MESSAGES.CHECKOUT}
-      </Button>
+      <CheckoutAction
+        disabled={!quote || query.isFetching}
+        pending={checkout.pending}
+        error={checkout.error}
+        onSubmit={checkout.submit}
+      />
     </div>
   );
 }
