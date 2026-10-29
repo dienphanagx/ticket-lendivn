@@ -19,6 +19,18 @@ describe('StyleNonce', () => {
 
     expect(getNonce()).toBe('nonce-abc');
   });
+
+  it('should keep the document nonce when the root layout re-renders with a newer request nonce', async () => {
+    // Module mới: get-nonce giữ nonce ở biến module, test trước đã đặt giá trị
+    vi.resetModules();
+    const { StyleNonce: FreshStyleNonce } = await import('@/components/providers/style-nonce');
+    const { getNonce: getFreshNonce } = await import('get-nonce');
+    const { rerender } = render(<FreshStyleNonce nonce="nonce-abc" />);
+
+    rerender(<FreshStyleNonce nonce="nonce-from-server-action" />);
+
+    expect(getFreshNonce()).toBe('nonce-abc');
+  });
 });
 
 describe('getRequestNonce', () => {

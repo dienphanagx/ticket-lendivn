@@ -4,11 +4,19 @@ import type { EventListing, EventSummary } from '@/features/events/types';
 import type { LedgerAccount } from '@/features/ledger/types';
 import type { Quote } from '@/features/listings/types';
 import type { OrderDetail, OrderSummary } from '@/features/orders/types';
+import type { UserSummary } from '@/features/users/types';
 
 export const USER_A = '11111111-1111-4111-8111-111111111111';
 export const USER_B = '22222222-2222-4222-8222-222222222222';
 /** Id có chữ cái (test so không phân biệt hoa thường) */
 export const USER_HEX = 'abcdef12-3456-4abc-8def-abcdefabcdef';
+
+export const buildUserSummary = (overrides: Partial<UserSummary> = {}): UserSummary => ({
+  id: USER_A,
+  displayName: 'An',
+  hasListings: true,
+  ...overrides,
+});
 
 export const buildListing = (overrides: Partial<EventListing> = {}): EventListing => ({
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
