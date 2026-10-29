@@ -16,6 +16,7 @@ export const BFF_ROUTES = {
   ORDER: (orderId: string) => `/bff/orders/${encodeURIComponent(orderId)}`,
   ORDER_PAYMENT_URL: (orderId: string) => `/bff/orders/${encodeURIComponent(orderId)}/payment-url`,
   LISTING_QUOTE: (listingId: string) => `/bff/listings/${encodeURIComponent(listingId)}/quote`,
+  EVENT_COMPLETE: (eventId: string) => `/bff/events/${encodeURIComponent(eventId)}/complete`,
 } as const;
 
 export const HEALTH_ROUTE = '/health';

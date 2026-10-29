@@ -1,4 +1,7 @@
+import type { BalanceEntry } from '@/features/account/types';
+import type { EventCompletion } from '@/features/admin/types';
 import type { EventListing, EventSummary } from '@/features/events/types';
+import type { LedgerAccount } from '@/features/ledger/types';
 import type { Quote } from '@/features/listings/types';
 import type { OrderDetail, OrderSummary } from '@/features/orders/types';
 
@@ -70,6 +73,44 @@ export const buildOrderDetail = (overrides: Partial<OrderDetail> = {}): OrderDet
   buyerFee: 250_000,
   refundAmount: null,
   retryAfterSeconds: 3,
+  ...overrides,
+});
+
+export const buildCompletion = (overrides: Partial<EventCompletion> = {}): EventCompletion => ({
+  id: EVENT_ID,
+  status: 'COMPLETED',
+  completedAt: '2026-10-29T05:00:00.000Z',
+  expiredOrderCount: 1,
+  releasedTotal: 2_625_000,
+  sellerReleases: [{ seller: { id: USER_B, displayName: 'Bình' }, amount: 2_375_000 }],
+  platformFeeAmount: 250_000,
+  ledgerTransactionId: '99999999-9999-4999-8999-999999999999',
+  ...overrides,
+});
+
+export const buildBalanceEntry = (overrides: Partial<BalanceEntry> = {}): BalanceEntry => ({
+  id: 'b0000000-0000-4000-8000-000000000001',
+  createdAt: '2026-10-29T03:05:00.000Z',
+  transactionId: 'c0000000-0000-4000-8000-000000000001',
+  transactionType: 'PAYMENT_CAPTURED',
+  description: `Bán 2 vé · Đêm nhạc mùa thu · Đơn ${ORDER_ID}`,
+  orderId: ORDER_ID,
+  eventId: EVENT_ID,
+  accountId: 'd0000000-0000-4000-8000-000000000001',
+  accountType: 'ESCROW_SELLER',
+  amount: 2_375_000,
+  balanceType: 'PENDING',
+  ...overrides,
+});
+
+export const buildLedgerAccount = (overrides: Partial<LedgerAccount> = {}): LedgerAccount => ({
+  id: 'd0000000-0000-4000-8000-000000000001',
+  type: 'ESCROW_SELLER',
+  user: { id: USER_B, displayName: 'Bình' },
+  event: { id: EVENT_ID, name: 'Đêm nhạc mùa thu' },
+  totalDebit: 0,
+  totalCredit: 2_375_000,
+  balance: 2_375_000,
   ...overrides,
 });
 

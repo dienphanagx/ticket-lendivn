@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDateTime, formatVnd } from '@/lib/format';
+import { formatDateTime, formatSignedVnd, formatVnd } from '@/lib/format';
+import { pageHref } from '@/lib/pagination';
 
 describe('formatVnd', () => {
   it.each([
@@ -38,5 +39,33 @@ describe('formatDateTime', () => {
 
   it('should reject an invalid date', () => {
     expect(() => formatDateTime('not-a-date')).toThrow(RangeError);
+  });
+});
+
+describe('formatSignedVnd', () => {
+  it.each([
+    [2_375_000, '+2.375.000 ₫'],
+    [-500_000, '−500.000 ₫'],
+    [0, '0 ₫'],
+    [1, '+1 ₫'],
+  ])('should format %i as %s', (amount, expected) => {
+    expect(formatSignedVnd(amount)).toBe(expected);
+  });
+
+  it('should use the minus sign, not a hyphen', () => {
+    expect(formatSignedVnd(-1)).not.toContain('-');
+  });
+});
+
+describe('pageHref', () => {
+  it('should keep filters and drop page 1', () => {
+    expect(pageHref('/quan-tri/so-cai', 1, { type: 'EVENT_RELEASE', eventId: undefined })).toBe(
+      '/quan-tri/so-cai?type=EVENT_RELEASE',
+    );
+    expect(pageHref('/quan-tri/so-cai', 2, { type: 'EVENT_RELEASE' })).toBe(
+      '/quan-tri/so-cai?type=EVENT_RELEASE&page=2',
+    );
+    expect(pageHref('/tai-khoan', 3)).toBe('/tai-khoan?page=3');
+    expect(pageHref('/tai-khoan', 1)).toBe('/tai-khoan');
   });
 });

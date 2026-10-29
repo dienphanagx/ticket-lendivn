@@ -23,6 +23,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ERROR_CODES.USER_NOT_FOUND]: 'Tài khoản đã chọn không còn tồn tại, vui lòng chọn lại',
   [ERROR_CODES.EVENT_NOT_FOUND]: 'Không tìm thấy sự kiện',
   [ERROR_CODES.EVENT_NOT_ON_SALE]: 'Sự kiện đã kết thúc, ngừng bán vé',
+  [ERROR_CODES.EVENT_ALREADY_COMPLETED]: 'Sự kiện đã được đánh dấu kết thúc trước đó',
   [ERROR_CODES.LISTING_NOT_FOUND]: 'Tin bán không còn tồn tại',
   [ERROR_CODES.CANNOT_BUY_OWN_LISTING]: 'Bạn không thể mua tin bán của chính mình',
   [ERROR_CODES.INSUFFICIENT_QUANTITY]: 'Không đủ vé, vui lòng chọn lại số lượng',
@@ -31,6 +32,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ERROR_CODES.IDEMPOTENCY_KEY_REUSED]: 'Chưa tạo được đơn, vui lòng thử lại',
   [ERROR_CODES.PAYMENT_GATEWAY_UNAVAILABLE]:
     'Không kết nối được cổng thanh toán, vui lòng thử lại sau',
+  [ERROR_CODES.LEDGER_ACCOUNT_NOT_FOUND]: 'Không tìm thấy tài khoản sổ cái',
 };
 
 export const SOLD_OUT_MESSAGE = 'Tin bán này vừa hết vé';

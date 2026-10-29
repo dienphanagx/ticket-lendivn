@@ -25,6 +25,16 @@ export function parsePageParam(raw: string | string[] | undefined): number {
 export const isPageOutOfRange = (page: number, meta: PageMeta) =>
   meta.totalPages >= FIRST_PAGE && page > meta.totalPages;
 
-/** Link trang: trang 1 không kèm query */
-export const pageHref = (pathname: string, page: number) =>
-  page <= FIRST_PAGE ? pathname : `${pathname}?page=${page}`;
+/** Bộ lọc giữ nguyên khi đổi trang; key `undefined` bị bỏ */
+export type PageQuery = Readonly<Record<string, string | undefined>>;
+
+/** Link trang: trang 1 không kèm `page`; bộ lọc (nếu có) đứng trước `page` */
+export function pageHref(pathname: string, page: number, query: PageQuery = {}): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== '') search.set(key, value);
+  }
+  if (page > FIRST_PAGE) search.set('page', String(page));
+  const qs = search.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}

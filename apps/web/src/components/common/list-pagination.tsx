@@ -3,15 +3,17 @@ import Link from 'next/link';
 import { Icon } from '@/components/custom/icon';
 import { Button } from '@/components/ui/button';
 import { PAGINATION_MESSAGES } from '@/constants/messages';
-import { pageHref, type PageMeta } from '@/lib/pagination';
+import { pageHref, type PageMeta, type PageQuery } from '@/lib/pagination';
 
 interface ListPaginationProps {
   pathname: string;
   meta: PageMeta;
+  /** Bộ lọc trên URL giữ nguyên khi đổi trang */
+  query?: PageQuery;
 }
 
 /** Trang trước / sau theo `meta` api trả; `totalPages` ≤ 1 → ẩn; đổi trang = điều hướng dựng lại từ server */
-export function ListPagination({ pathname, meta }: ListPaginationProps) {
+export function ListPagination({ pathname, meta, query }: ListPaginationProps) {
   if (meta.totalPages <= 1) return null;
   const hasPrevious = meta.page > 1;
   const hasNext = meta.page < meta.totalPages;
@@ -23,7 +25,7 @@ export function ListPagination({ pathname, meta }: ListPaginationProps) {
       {hasPrevious ? (
         <Button asChild variant="outline" size="icon">
           <Link
-            href={pageHref(pathname, meta.page - 1)}
+            href={pageHref(pathname, meta.page - 1, query)}
             rel="prev"
             aria-label={PAGINATION_MESSAGES.PREVIOUS}
           >
@@ -41,7 +43,7 @@ export function ListPagination({ pathname, meta }: ListPaginationProps) {
       {hasNext ? (
         <Button asChild variant="outline" size="icon">
           <Link
-            href={pageHref(pathname, meta.page + 1)}
+            href={pageHref(pathname, meta.page + 1, query)}
             rel="next"
             aria-label={PAGINATION_MESSAGES.NEXT}
           >

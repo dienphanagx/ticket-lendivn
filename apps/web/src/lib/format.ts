@@ -11,6 +11,13 @@ export function formatVnd(amount: number): string {
   return `${amount < 0 ? MINUS_SIGN : ''}${digits} ${VND_SUFFIX}`;
 }
 
+const PLUS_SIGN = '+';
+
+/** Số tiền có dấu của bút toán: `+1.000 ₫` (tăng), `−1.000 ₫` (giảm), `0 ₫` */
+export function formatSignedVnd(amount: number): string {
+  return amount > 0 ? `${PLUS_SIGN}${formatVnd(amount)}` : formatVnd(amount);
+}
+
 const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   timeZone: TIME_ZONE,
   year: 'numeric',
