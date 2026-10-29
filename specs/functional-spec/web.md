@@ -27,7 +27,7 @@
 - Thanh đầu trang có mặt ở mọi trang: dropdown chọn tài khoản (§A) và liên kết điều hướng "Sự kiện", "Đơn hàng", "Tài khoản", "Quản trị"; mọi liên kết hiện với mọi tài khoản
 - Hành động cần tài khoản (chọn vé, thanh toán, xem đơn hàng, xem tài khoản, quản trị) khi chưa chọn tài khoản: không thực hiện, hiển thị "Vui lòng chọn tài khoản để tiếp tục" và mở dropdown chọn tài khoản
 - Mọi yêu cầu gửi tới `api` kèm mã tài khoản đang chọn; không có phân quyền theo vai trò, mọi tài khoản thấy cùng các trang và thao tác
-- Mọi số tiền chính thức (tổng đơn, số dư, bút toán) lấy từ `api`; web không tự tính hay cộng dồn số dư. Ngoại lệ duy nhất là số tạm tính ở §C Chọn Vé Và Xem Tổng Tiền
+- Mọi số tiền hiển thị (tạm tính, tổng đơn, số dư, bút toán) lấy từ `api`; web không tự tính tiền, phí hay cộng dồn số dư
 - Định dạng tiền: VND số nguyên, dấu chấm ngăn cách hàng nghìn, hậu tố "₫" (vd `1.250.000 ₫`); số âm có dấu "−" phía trước
 - Định dạng thời gian: múi giờ Asia/Ho_Chi_Minh, dạng `dd/MM/yyyy HH:mm`
 - Giao diện dùng được từ chiều rộng màn hình 360px, không cuộn ngang; nút thao tác có vùng chạm tối thiểu 44×44px
@@ -50,7 +50,7 @@
 1. Người dùng nhấn dropdown tài khoản trên thanh đầu trang
 2. Hệ thống mở danh sách thả xuống (cập nhật tại chỗ) — hiển thị: các tài khoản mẫu, mỗi mục là tên hiển thị của tài khoản; tài khoản đang chọn có dấu chọn; khi chưa chọn, dropdown hiển thị chữ "Chọn tài khoản"
 3. Người dùng chọn một tài khoản trong danh sách
-4. Hệ thống lưu lựa chọn và tải lại dữ liệu trang hiện tại theo tài khoản mới (cập nhật tại chỗ) — hiển thị: tên tài khoản mới trên dropdown, nội dung trang theo góc nhìn tài khoản đó, thông báo ngắn "Đang xem với tài khoản {tên hiển thị}" tự ẩn sau 3 giây
+4. Hệ thống lưu lựa chọn và tải lại dữ liệu trang hiện tại theo tài khoản mới (cập nhật tại chỗ) — hiển thị: tên tài khoản mới trên dropdown, nội dung trang theo góc nhìn tài khoản đó, thông báo ngắn "Đang xem với tài khoản {tên hiển thị}" nổi ở đầu trang (được trình đọc màn hình đọc như thông báo trạng thái), tự ẩn sau 3 giây
 
 **Trường hợp ngoại lệ**:
 - Không tải được danh sách tài khoản: trong dropdown hiển thị "Không tải được danh sách tài khoản" kèm nút "Thử lại"
@@ -59,6 +59,8 @@
 - Đổi tài khoản khi đang chọn vé trên trang sự kiện:
   - Tài khoản mới là người bán của tin đang chọn: bỏ lựa chọn vé, hiển thị "Bạn không thể mua tin bán của chính mình"
   - Trường hợp khác: giữ nguyên tin bán và số lượng đang chọn
+- Nhấn Esc khi dropdown tài khoản đang mở: chỉ đóng dropdown, không đổi tài khoản; khu chọn vé đang mở (nếu có) giữ nguyên tin bán và số lượng
+- Đang tạo đơn thanh toán (§C Xác Nhận Thanh Toán, nút ở trạng thái đang xử lý): dropdown tài khoản bị vô hiệu hoá, không mở được và không đổi được tài khoản cho tới khi có phản hồi
 - Đổi tài khoản khi đang ở trang kết quả của một đơn: xử lý theo §C Xem Kết Quả Thanh Toán (không tìm thấy đơn hàng)
 
 **Kiểm tra dữ liệu**:
@@ -140,9 +142,9 @@
 
 **Luồng chính**:
 1. Người mua nhấn "Chọn" ở một tin bán trên trang sự kiện
-2. Hệ thống mở khu chọn số lượng của tin đó (cập nhật tại chỗ; trên màn hình dưới 768px là bottom sheet) — hiển thị: tên người bán, giá mỗi vé, số vé còn lại, ô số lượng có nút "−" / "+" (mặc định 1), bảng tạm tính gồm "Tiền vé", "Phí dịch vụ (10%)", "Tổng thanh toán", nút "Thanh toán"
+2. Hệ thống mở khu chọn số lượng của tin đó và lấy tạm tính từ `api` cho số lượng 1 (cập nhật tại chỗ; trên màn hình dưới 768px là bottom sheet) — hiển thị: tên người bán, giá mỗi vé, số vé còn lại, ô số lượng có nút "−" / "+" (mặc định 1), bảng tạm tính gồm "Tiền vé", "Phí dịch vụ (10%)", "Tổng thanh toán", nút "Thanh toán"
 3. Người mua tăng / giảm hoặc nhập số lượng
-4. Hệ thống tính lại bảng tạm tính (cập nhật tại chỗ) — hiển thị: tiền vé, phí dịch vụ, tổng thanh toán theo số lượng mới
+4. Hệ thống lấy lại tạm tính từ `api` theo số lượng mới (cập nhật tại chỗ) — hiển thị: khung chờ (skeleton) ở ba ô của bảng tạm tính và nút "Thanh toán" bị vô hiệu hoá trong lúc đang tính, sau đó tiền vé, phí dịch vụ, tổng thanh toán của số lượng mới
 
 **Trường hợp ngoại lệ**:
 - Validation số lượng thất bại: hiện câu lỗi dưới ô số lượng, vô hiệu hoá nút "Thanh toán", bảng tạm tính hiển thị "—"
@@ -151,15 +153,20 @@
   - Lớn hơn số vé còn lại: "Chỉ còn {N} vé"
 - Nút "−" bị vô hiệu hoá khi số lượng là 1; nút "+" bị vô hiệu hoá khi số lượng bằng số vé còn lại
 - Người mua nhấn "Chọn" ở tin bán khác: khu chọn chuyển sang tin mới, số lượng đặt lại 1
-- Người mua đóng khu chọn (nút đóng, vuốt xuống bottom sheet, phím Esc): huỷ lựa chọn, không tạo đơn
+- Người mua đóng khu chọn (nút "Đóng", phím Esc; với bottom sheet thêm chạm vùng nền bên ngoài): huỷ lựa chọn, không tạo đơn, trả focus về nút "Chọn" đã mở khu chọn
+- Tạm tính `api` trả về cho thấy số vé còn lại đã giảm: tải lại số vé còn lại của tin bán ngay khi đổi số lượng, áp lại validation số lượng theo số mới ("Chỉ còn {N} vé" dưới ô số lượng)
+- Tạm tính `api` trả về tin bán không còn tồn tại / sự kiện đã kết thúc / tin bán của chính tài khoản đang chọn / tin vừa hết vé: đóng khu chọn, tải lại trang sự kiện, hiển thị câu báo tương ứng như §C Xác Nhận Thanh Toán
+- Không lấy được tạm tính (lỗi mạng, lỗi hệ thống, quá 15 giây): bảng tạm tính hiển thị "—", nút "Thanh toán" bị vô hiệu hoá, câu lỗi theo Quy tắc chung kèm nút "Thử lại"
 
 **Kiểm tra dữ liệu**:
 - Số lượng: bắt buộc, số nguyên, 1 ≤ số lượng ≤ số vé còn lại của tin bán; chỉ nhận ký tự `0-9`
 
 **Quy tắc nghiệp vụ**:
 - Chỉ chọn 1 tin bán cho mỗi lần thanh toán
-- Bảng tạm tính dùng đúng quy tắc phí của spec `api` (tham chiếu, đã chốt trong requirements): Tiền vé = giá mỗi vé × số lượng; Phí dịch vụ = 10% tiền vé, làm tròn xuống tới đồng; Tổng thanh toán = Tiền vé + Phí dịch vụ
-- Số tạm tính chỉ để hiển thị; số tiền chính thức của đơn do `api` tính khi tạo đơn
+- Bảng tạm tính hiển thị đúng số `api` trả về cho tin bán + số lượng đang nhập (quy tắc phí theo spec `api`, tham chiếu); web không tự tính tiền vé, phí hay tổng
+- Bảng chỉ hiển thị số của tạm tính khớp đúng tin bán và số lượng đang nhập; tạm tính của số lượng cũ không được hiển thị trong lúc đang tính số mới. Nút "Thanh toán" chỉ bật khi đã có tạm tính khớp và không có lần tính nào đang chạy
+- Số lượng không hợp lệ → không gửi yêu cầu tạm tính
+- Số tạm tính chỉ để hiển thị; số tiền chính thức của đơn do `api` ghi khi tạo đơn
 - Phần 5% khấu trừ của người bán không hiển thị cho người mua
 
 #### Xác Nhận Thanh Toán
@@ -177,7 +184,7 @@
 6. Hệ thống (cổng) chuyển người mua về trang kết quả của đơn — hiển thị: nội dung theo §C Xem Kết Quả Thanh Toán
 
 **Trường hợp ngoại lệ**:
-- Số vé còn lại không đủ tại thời điểm tạo đơn: không tạo đơn, cập nhật số vé còn lại của tin bán, hiển thị "Chỉ còn {N} vé, vui lòng chọn lại số lượng"; còn 0 vé → đóng khu chọn, tin hiển thị "Hết vé" và thông báo "Tin bán này vừa hết vé"
+- Số vé còn lại không đủ tại thời điểm tạo đơn (chỉ xảy ra khi vé bị mua / giữ chỗ trong khoảng giữa lần tạm tính gần nhất và lúc tạo đơn, vì khu chọn đã làm mới số còn lại theo tạm tính mỗi khi đổi số lượng — §C Chọn Vé Và Xem Tổng Tiền): không tạo đơn, cập nhật số vé còn lại của tin bán, hiển thị "Chỉ còn {N} vé, vui lòng chọn lại số lượng"; còn 0 vé → đóng khu chọn, tin hiển thị "Hết vé" và thông báo "Tin bán này vừa hết vé"
 - Sự kiện đã kết thúc trong lúc đang chọn: không tạo đơn, đóng khu chọn, hiển thị băng thông báo "Sự kiện đã kết thúc, ngừng bán vé"
 - Tin bán của chính tài khoản đang chọn: hiển thị "Bạn không thể mua tin bán của chính mình"
 - Tin bán không còn tồn tại: đóng khu chọn, tải lại danh sách tin bán, hiển thị "Tin bán không còn tồn tại"
@@ -195,6 +202,7 @@
 - Địa chỉ quay về sau thanh toán là trang kết quả của chính đơn đó (`/don-hang/{mã đơn}`)
 - Không có thao tác "tiếp tục thanh toán" cho đơn đang chờ; muốn mua lại thì tạo đơn mới
 - Mỗi lần bấm "Thanh toán" chỉ gửi 1 yêu cầu; nút bị vô hiệu hoá cho tới khi có phản hồi
+- Trong lúc đang tạo đơn: không đổi được tài khoản (§A), mọi nút "Chọn" bị vô hiệu hoá (không đổi được tin bán) và khu chọn không đóng được, cho tới khi có phản hồi
 
 #### Xem Kết Quả Thanh Toán
 
@@ -257,7 +265,7 @@
 - Chưa chọn tài khoản: xử lý theo Quy tắc chung (yêu cầu chọn tài khoản)
 - Chưa có bút toán nào: hai ô số dư hiển thị `0 ₫`, bảng hiển thị "Chưa có giao dịch nào"
 - Tham số `page` vượt quá `meta.totalPages`: chuyển về trang 1
-- Tải lịch sử lỗi nhưng số dư tải được: vẫn hiển thị số dư, bảng hiển thị "Không tải được lịch sử giao dịch" kèm nút "Thử lại"
+- Lỗi khi tải trang Tài khoản (lỗi mạng, lỗi hệ thống, quá 15 giây): số dư và lịch sử đến từ cùng một phản hồi của `api` nên không có trường hợp chỉ một phần tải được; hiển thị trang lỗi chung kèm nút "Thử lại" theo Quy tắc chung
 
 **Kiểm tra dữ liệu**:
 - Tham số `page`: tuỳ chọn, số nguyên ≥ 1, mặc định 1 nếu không có hoặc không hợp lệ
@@ -266,6 +274,7 @@
 - Hai số dư và lịch sử bút toán do `api` tính từ sổ cái (tham chiếu spec `api`); web không tự cộng các dòng lịch sử để ra số dư
 - Áp dụng cho mọi tài khoản: người bán thường có số dư đang chờ từ tiền bán vé; người mua thường là 0, trừ khoản cần hoàn tiền nằm ở số dư khả dụng
 - Lịch sử sắp xếp mới nhất trước
+- Chỉ dòng khoản hoàn tiền (tài khoản sổ cái phải hoàn người mua) có liên kết "Xem đơn {mã đơn}" tới `/don-hang/{mã đơn}`, vì đó là đơn do chính tài khoản mua; dòng bán vé thuộc đơn người khác mua nên không có liên kết
 - Không có thao tác rút tiền hay chi trả
 
 #### Xem Danh Sách Đơn Hàng
@@ -310,13 +319,15 @@
 1. Người dùng nhấn "Quản trị" trên thanh đầu trang
 2. Hệ thống chuyển đến trang Quản trị — hiển thị: danh sách sự kiện, mỗi sự kiện gồm tên, thời gian diễn ra, trạng thái, số tiền đang ký quỹ, số đơn đang chờ thanh toán, nút "Đánh dấu kết thúc" (chỉ ở sự kiện đang bán); liên kết "Xem sổ cái"
 3. Người dùng nhấn "Đánh dấu kết thúc" ở một sự kiện
-4. Hệ thống mở modal xác nhận — hiển thị: "Kết thúc sự kiện {Tên sự kiện}? Thao tác không thể hoàn tác.", số tiền ký quỹ sẽ giải phóng, số người bán nhận tiền, số đơn đang chờ thanh toán sẽ chuyển hết hạn, nút "Huỷ" và "Xác nhận kết thúc"
+4. Hệ thống mở modal xác nhận dạng hộp cảnh báo — hiển thị: "Kết thúc sự kiện {Tên sự kiện}? Thao tác không thể hoàn tác.", số tiền ký quỹ sẽ giải phóng, số người bán nhận tiền, số đơn đang chờ thanh toán sẽ chuyển hết hạn, chỉ hai nút "Huỷ" và "Xác nhận kết thúc" (không có nút đóng X)
 5. Người dùng nhấn "Xác nhận kết thúc"
-6. Hệ thống gửi yêu cầu, đóng modal khi thành công và cập nhật dòng sự kiện (cập nhật tại chỗ) — hiển thị: thông báo "Đã kết thúc sự kiện {Tên sự kiện}, giải phóng {số tiền} ₫ cho {N} người bán", trạng thái "Đã kết thúc", số tiền ký quỹ `0 ₫`, nút "Đánh dấu kết thúc" biến mất
+6. Hệ thống gửi yêu cầu, đóng modal khi thành công và dựng lại danh sách sự kiện (cập nhật tại chỗ) — hiển thị: thông báo nổi ở đầu trang "Đã kết thúc sự kiện {Tên sự kiện}, giải phóng {số tiền} ₫ cho {N} người bán", trạng thái "Đã kết thúc", số tiền ký quỹ `0 ₫`, nút "Đánh dấu kết thúc" biến mất
 
 **Trường hợp ngoại lệ**:
 - Chưa chọn tài khoản: xử lý theo Quy tắc chung (yêu cầu chọn tài khoản)
-- Nhấn "Huỷ", nút đóng hoặc phím Esc trên modal: đóng modal, không thay đổi gì
+- Nhấn "Huỷ" hoặc phím Esc trên modal: đóng modal, không thay đổi gì, trả focus về nút "Đánh dấu kết thúc" đã mở modal
+- Đang gửi yêu cầu xác nhận: nút "Xác nhận kết thúc" chuyển "Đang xử lý…", "Huỷ" và Esc không đóng được modal cho tới khi có phản hồi
+- Sau khi kết thúc thành công, trong lúc danh sách đang dựng lại: mọi nút "Đánh dấu kết thúc" bị vô hiệu hoá, không mở được modal; nút của sự kiện vừa kết thúc biến mất khi danh sách dựng lại xong
 - Sự kiện đã được kết thúc trước đó (tab khác hoặc người khác): đóng modal, cập nhật dòng sự kiện, hiển thị "Sự kiện đã được đánh dấu kết thúc trước đó"
 - Lỗi mạng hoặc lỗi hệ thống khi xác nhận: giữ modal, mở lại nút "Xác nhận kết thúc", hiển thị "Chưa kết thúc được sự kiện, vui lòng thử lại"; lần bấm lại an toàn vì thao tác kết thúc một sự kiện chỉ có hiệu lực một lần
 - Không có sự kiện nào: hiển thị "Chưa có sự kiện nào"

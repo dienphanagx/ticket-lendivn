@@ -3,7 +3,7 @@
 > Chỉ pin major version của framework chính. Thư viện bổ sung không ghi version (cài bản mới nhất qua CLI scaffold), trừ khi cột Version ghi lý do.
 
 ## TÓM TẮT
-- **apps/web**: Next.js 16 (≥ 16.3) + React 19, TypeScript 6
+- **apps/web**: Next.js 16 (pin `16.4.1`, bản vá bảo mật) + React 19, TypeScript 6
 - **apps/api**: Node.js 24 LTS + Fastify 5, TypeScript 6
 - **Database**: PostgreSQL 18 + Kysely 0.29 (driver `pg`) + Kysely Migrator
 - **Runtime / package manager**: Node.js 24 LTS, pnpm 10 (≥ 10.19) cho cả 2 app
@@ -15,16 +15,19 @@
 
 | Package | Mục đích | Version (chỉ điền nếu có ràng buộc) |
 |---------|----------|-------------------------------------|
-| `next` | App Router, Server Component dựng trang từ máy chủ, Server Action, Route Handler `/bff/*` | 16, ≥ 16.3 vì `error.tsx` nhận `retry()` từ 16.3 (skill `nextjs-feature` § Version) |
-| `react`, `react-dom` | UI | 19 (skill `nextjs-feature` § Version) |
+| `next` | App Router, Server Component dựng trang từ máy chủ, Route Handler `/bff/*` cho mọi lời gọi từ Client Component, Server Action chỉ cho chọn tài khoản | 16, pin chính xác `16.4.1` (cùng `eslint-config-next`) vì bản vá bảo mật; tối thiểu ≥ 16.3 vì `error.tsx` nhận `retry()` từ 16.3 (skill `nextjs-feature` § Version) |
+| `react`, `react-dom` | UI | 19, `package.json` pin chính xác `19.3.0` (skill `nextjs-feature` § Version) |
 | `typescript` | Type check strict | 6, vì npm `latest` đã là 7 (rule `stack-ts` § Version) |
 | `tailwindcss` | Styling mobile-first từ 360px | — |
-| `shadcn/ui` | Drawer (bottom sheet chọn vé dưới 768px), Dialog (modal kết thúc sự kiện), Skeleton, Sonner (toast), Table, Badge — có sẵn đúng các thành phần spec web cần | CLI 4 (`pnpm dlx shadcn@4`, skill `nextjs-feature` § Version) |
+| `shadcn/ui` (+ `radix-ui`) | Sheet (Radix Dialog, bottom sheet chọn vé dưới 768px), AlertDialog (modal kết thúc sự kiện), DropdownMenu (chọn tài khoản), Skeleton, Table, Badge — có sẵn đúng các thành phần spec web cần | CLI 4 (`pnpm dlx shadcn@4`, skill `nextjs-feature` § Version) |
+| `get-nonce` | Component `StyleNonce` đặt đầu `<body>` truyền nonce CSP của request cho `react-remove-scroll` (khoá cuộn khi mở overlay Radix) để `<style>` nó chèn qua được `style-src 'nonce-…'`; chỉ đặt 1 lần lúc hydrate, vì `router.refresh()` / Server Action dựng lại layout bằng nonce mới trong khi CSP của trang vẫn là nonce cũ | — |
 | `lucide-react` | Icon (đang xử lý, đóng, dấu chọn) | — |
-| `@tanstack/react-query` | Hỏi lại trạng thái đơn trên trang kết quả theo `retryAfterSeconds`, dừng sau 120 giây | 5 (skill `nextjs-feature` § Version) |
-| `zod` | Validate tham số URL (slug, mã đơn, mã tài khoản sổ cái, `page`) và ô số lượng; `zod/mini` cho schema chạy ở trình duyệt để bundle nhỏ | 4 (skill `nextjs-feature` § Version) |
-| `server-only` | Chặn module gọi `api` (đọc `API_INTERNAL_URL`, cookie) bị import vào Client Component | — |
-| `vitest` | Unit test hàm thuần: tạm tính phí, định dạng tiền / giờ, logic dừng hỏi lại | 5 (bản đã chốt với user, cùng major với `apps/api`) |
+| `@tanstack/react-query` | Hỏi lại trạng thái đơn trên trang kết quả theo `retryAfterSeconds` (dừng sau 120 giây), tạm tính, mutation tạo đơn / kết thúc sự kiện qua `/bff/*` | 5 (skill `nextjs-feature` § Version) |
+| `zod` | Validate tham số URL (slug, mã đơn, mã tài khoản sổ cái, `page`), ô số lượng và input Route Handler `/bff/*`; `zod/mini` cho schema chạy ở trình duyệt để bundle nhỏ; bật `jitless` (`src/lib/zod-config.ts`, import trước schema đầu tiên) để Zod không dò `new Function` — CSP không có `'unsafe-eval'` nên lần dò đó ghi vi phạm `script-src` | 4 (skill `nextjs-feature` § Version) |
+| `server-only` | Chặn module gọi `api` (đọc `API_INTERNAL_URL`, `SITE_URL`, cookie) bị import vào Client Component | — |
+| `vitest` | Unit test hàm thuần (tạm tính phí, định dạng tiền / giờ, logic dừng hỏi lại, CSP) và test component với `@testing-library/react` trên `jsdom` | 5 (bản đã chốt với user, cùng major với `apps/api`) |
+| `sonner` | Không dùng: chèn `<style>` không mang nonce, bị CSP `style-src 'nonce-…'` chặn; thông báo ngắn dùng component tự viết `FlashNotice` (vùng `role="status"` `aria-live`, tự ẩn theo thời gian) | — |
+| `vaul` (Drawer) | Không dùng: tự chèn `<style>` không nonce, bị CSP chặn; bottom sheet dùng shadcn Sheet | — |
 | `next-intl` | Không dùng: app chỉ tiếng Việt, URL không prefix locale; câu lỗi map qua 1 hằng `ERROR_MESSAGES` theo `code` (rule `policy-api` § Response format) | — |
 | `jose` | Không dùng: không có đăng nhập / token; người dùng hiện tại là cookie `current_user_id`, BFF forward header `X-User-Id` | — |
 

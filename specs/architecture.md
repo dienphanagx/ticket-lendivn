@@ -21,7 +21,7 @@ Tên app theo rule `policy-isolation`. Chỉ ghi app + vai trò; layout trong ap
 ### Quan Hệ Giữa Các App
 
 ```text
-trình duyệt → web (HTTP :3000; cookie current_user_id)
+trình duyệt → web (HTTP :3000; trang dựng từ máy chủ + Route Handler /bff/* same-origin; cookie current_user_id)
 trình duyệt → VNPay sandbox (chuyển hướng tới vpcpay.html; VNPay chuyển về web /don-hang/:orderId kèm tham số vnp_* có chữ ký)
 web → api (REST server-side qua API_INTERNAL_URL, header X-User-Id; không có lời gọi trình duyệt → api)
 api → PostgreSQL (Kysely + pg, pool)
@@ -74,16 +74,20 @@ Cả return và IPN gọi chung `PaymentRecorder.record()` (cùng `querydr` tron
 | Path | Auth | Mô tả |
 |------|------|-------|
 | `/` | public | Danh sách sự kiện ("Đang bán" trước, theo thời gian diễn ra) |
-| `/su-kien/:slug` | public (nhãn "Tin của bạn" theo cookie) | Trang sự kiện + tin bán; khu chọn vé (bottom sheet dưới 768px), tạm tính phí; "Thanh toán" gọi Server Action tạo đơn + lấy URL VNPay rồi `window.location.assign` |
-| `/don-hang/:orderId` | cần chọn tài khoản | Trang kết quả, cũng là `vnp_ReturnUrl`; có `vnp_SecureHash` trên query → chuyển tiếp tới `POST /v1/payments/vnpay/return` rồi `redirect` về URL không query; đơn không do tài khoản đang chọn mua → 404 "Không tìm thấy đơn hàng"; đơn đang chờ → hỏi lại qua `/bff/orders/:orderId` |
+| `/su-kien/:slug` | public (nhãn "Tin của bạn" theo cookie) | Trang sự kiện + tin bán; khu chọn vé (bottom sheet dưới 768px), tạm tính phí qua `/bff/listings/:listingId/quote`; "Thanh toán" gọi `POST /bff/orders` rồi `POST /bff/orders/:orderId/payment-url`, nhận URL VNPay rồi `window.location.assign` |
+| `/don-hang/:orderId` | cần chọn tài khoản | Trang kết quả, cũng là `vnp_ReturnUrl`; query có tham số `vnp_*` → chỉ khi có `vnp_SecureHash` mới chuyển tiếp nguyên các tham số `vnp_*` tới `POST /v1/payments/vnpay/return` (không gắn `X-User-Id`, bỏ qua kết quả / lỗi), rồi luôn `redirect` (replace) về URL không query; đơn không do tài khoản đang chọn mua → 404 "Không tìm thấy đơn hàng"; đơn đang chờ → hỏi lại qua `GET /bff/orders/:orderId` |
 | `/don-hang` | cần chọn tài khoản | Đơn do tài khoản đang chọn mua (`buyerId` = cookie), `?page=`, `limit` 20 |
 | `/tai-khoan` | cần chọn tài khoản | Số dư đang chờ, số dư khả dụng, lịch sử bút toán, `?page=`, `limit` 20 |
-| `/quan-tri` | cần chọn tài khoản | Danh sách sự kiện kèm ký quỹ, đơn đang chờ; modal "Đánh dấu kết thúc" gọi Server Action |
+| `/quan-tri` | cần chọn tài khoản | Danh sách sự kiện kèm ký quỹ, đơn đang chờ; modal "Đánh dấu kết thúc" gọi `POST /bff/events/:eventId/complete` rồi `router.refresh()` |
 | `/quan-tri/so-cai` | cần chọn tài khoản | Bảng tài khoản sổ cái: tổng nợ, tổng có, số dư; Σ nợ = Σ có toàn sổ |
 | `/quan-tri/so-cai/:accountId` | cần chọn tài khoản | Chi tiết tài khoản sổ cái và dòng bút toán, `?page=`, `limit` 50 |
-| `/bff/orders/:orderId` | cookie `current_user_id` | Route Handler `GET` cho TanStack Query hỏi lại trạng thái đơn; người mua ≠ cookie → 404 cùng thông báo |
+| `/bff/orders` | cookie `current_user_id` | Route Handler `POST` tạo đơn: header `Idempotency-Key` UUID v4 + body `listingId`, `quantity` → `POST /v1/orders` |
+| `/bff/orders/:orderId/payment-url` | cookie `current_user_id` | Route Handler `POST` lấy URL VNPay: đọc đơn qua `GET /v1/orders/:orderId`, người mua ≠ cookie → 404 "Không tìm thấy đơn hàng"; `clientIp` lấy từ header request, không từ body trình duyệt → `POST /v1/orders/:orderId/payment-url` |
+| `/bff/orders/:orderId` | cookie `current_user_id` | Route Handler `GET` cho TanStack Query hỏi lại trạng thái đơn; người mua ≠ cookie → 404 cùng thông báo; không trả `paymentUrl` |
+| `/bff/listings/:listingId/quote` | cookie `current_user_id` | Route Handler `GET` `?quantity=` cho bảng tạm tính → `GET /v1/listings/:listingId/quote`; trình duyệt huỷ thì huỷ lời gọi `api` |
+| `/bff/events/:eventId/complete` | cookie `current_user_id` | Route Handler `POST` đánh dấu sự kiện kết thúc → `POST /v1/events/:eventId/complete`; không chuyển tín hiệu huỷ của trình duyệt sang `api` |
 
-Server Action: `selectUser` (set cookie, `router.refresh()`), `createOrderAndPay` (`POST /v1/orders` → `POST /v1/orders/:orderId/payment-url`, trả URL), `completeEvent` (`POST /v1/events/:eventId/complete`). Phân trang dùng `?page=` trên URL, chuyển trang = điều hướng dựng lại từ máy chủ.
+Mọi Route Handler `/bff/*` đi cùng 1 khuôn: chặn cross-site (§ Auth & Authz) → validate param / query / body bằng Zod (`400 VALIDATION_FAILED`) → thiếu cookie `current_user_id` → `401 USER_NOT_SELECTED` → gọi `api` server-side; lỗi trả cùng envelope `{ code, message, details? }`, header response theo § Cross-cutting Concerns. Server Action duy nhất ở `features/users`: `selectUser` (kiểm mã có trong `GET /v1/users` rồi set cookie, Next dựng lại trang theo cookie mới) và `clearCurrentUser` (xoá cookie khi tài khoản đã lưu không còn tồn tại). Phân trang dùng `?page=` trên URL, chuyển trang = điều hướng dựng lại từ máy chủ.
 
 ### Dịch Vụ Ngoài (Third-party)
 
@@ -100,7 +104,7 @@ Secret VNPay / ngrok chỉ nằm trong `.env` (không commit); `.env.example` đ
 
 | App | Nền tảng | CI | Registry | Cách deploy | Domain | Ghi chú |
 |-----|----------|----|----------|-------------|--------|---------|
-| `web` | Docker Compose local, build `./apps/web` (Next.js standalone) | Không có (bài test chạy local) | — | `docker compose up` | `http://localhost:3000` | `APP_ENV`, `API_INTERNAL_URL=http://api:8080/api`; chờ `api` healthy |
+| `web` | Docker Compose local, build `./apps/web` (Next.js standalone) | Không có (bài test chạy local) | — | `docker compose up` | `http://localhost:3000` | `APP_ENV`, `API_INTERNAL_URL=http://api:8080/api`, `SITE_URL` (mặc định `http://localhost:3000`, origin dùng để kiểm `Origin` của `/bff/*`); chờ `api` healthy |
 | `api` | Docker Compose local, build `./apps/api` | Không có | — | `docker compose up`; entrypoint `migrate` → `seed` → server | `http://127.0.0.1:8080` (publish loopback để debug) | `APP_ENV`, `PORT=8080`, `DATABASE_URL`, `LOG_LEVEL`, `VNPAY_*`; chờ `db` healthy; healthcheck `GET /health/ready` |
 | `db` | `postgres:18-alpine` trong Docker Compose | — | — | Volume `pgdata`; chỉ chứa DB dev `ticket` | Không publish port | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
 | `db-test` | `postgres:18-alpine`, compose profile `test` | — | — | Dựng cùng `api-test`; dữ liệu trên tmpfs, không volume, mất khi container dừng | Không publish port | DB `ticket_test`; tách khỏi `db` vì rule `destructive-ops` § Database: không dùng DB dev làm DB test, `TRUNCATE` chỉ trên DB test ephemeral |
@@ -114,7 +118,10 @@ Secret VNPay / ngrok chỉ nằm trong `.env` (không commit); `.env.example` đ
   - `SameSite=Lax` chứ không `Strict`: VNPay chuyển người mua về `/don-hang/:orderId` bằng điều hướng top-level từ site khác, `Strict` làm request đó thiếu cookie và trang kết quả rơi vào "chưa chọn tài khoản"
   - Server `web` đọc cookie rồi gắn header `X-User-Id` khi gọi `api`; `api` tin header, chỉ dùng để biết người thao tác (không phải xác thực); `api` trả `USER_NOT_FOUND` → `web` xoá cookie, hiện "Tài khoản đã chọn không còn tồn tại, vui lòng chọn lại"
   - Endpoint VNPay (IPN, return) xác thực bằng chữ ký HMAC-SHA512 với `VNPAY_HASH_SECRET`
-  - CSRF: thao tác ghi đi qua Server Action (Next tự so `Origin` với `Host`); Route Handler `/bff/orders/:orderId` chỉ `GET` đọc
+  - CSRF: mọi Route Handler `/bff/*` (kể cả `GET`) kiểm `isSameOrigin` trước khi đọc cookie, sai → `403`
+    - Có `Sec-Fetch-Site` → chỉ nhận `same-origin` (`same-site` của subdomain khác cũng chặn)
+    - Thiếu `Sec-Fetch-Site` (trình duyệt cũ): `GET` / `HEAD` cho qua vì chỉ đọc; `POST` bắt buộc `Origin` khớp origin của `SITE_URL`, thiếu hoặc lệch → chặn (fail-closed)
+    - Server Action `selectUser` / `clearCurrentUser`: Next tự so `Origin` với `Host`
 - **Token TTL**: không dùng — không có token
 - **Roles của dự án**: không có; Khu Quản Trị mở cho mọi tài khoản. Không mua tin của chính mình là luật nghiệp vụ, trả `422 CANNOT_BUY_OWN_LISTING` (rule `policy-api` § HTTP status), không phải lỗi quyền
 
@@ -137,7 +144,7 @@ Secret VNPay / ngrok chỉ nằm trong `.env` (không commit); `.env.example` đ
 | **File storage** | Không dùng | Không có upload |
 | **Rate limit policy** | Không dùng | `api` không publish ra Internet ngoài lúc bật tunnel, không có endpoint đăng nhập; VNPay tự giới hạn số lần gửi IPN |
 | **CORS allowed origins** | Không cần — trình duyệt không gọi `api`, `api` không bật CORS | credentials: — |
-| **Security headers** | `web`: CSP nonce sinh mỗi request trong `src/proxy.ts` (`default-src 'self'`, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`; HSTS chỉ khi `APP_ENV=production` (local là HTTP); chuyển sang VNPay bằng điều hướng top-level nên CSP không cần mở domain VNPay. `api`: `@fastify/helmet` mặc định (rule `policy-owasp` § Network & headers) | |
+| **Security headers** | `web`: CSP nonce sinh mỗi request trong `src/proxy.ts` (`default-src 'self'`, `script-src 'self' 'nonce-…' 'strict-dynamic'`, `style-src 'self' 'nonce-…'` không `'unsafe-inline'`, `'unsafe-eval'` chỉ khi dev, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`; HSTS chỉ khi `APP_ENV=production` (local là HTTP); chuyển sang VNPay bằng điều hướng top-level nên CSP không cần mở domain VNPay. Response `/bff/*`: `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` (chỉ là data, trình duyệt không render / chạy được). `api`: `@fastify/helmet` mặc định (rule `policy-owasp` § Network & headers) | Thư viện chèn `<style>` lúc chạy phải mang nonce của request (`specs/tech-stack.md`: `get-nonce`, không `sonner` / `vaul`, Zod `jitless`) |
 
 ### Monitoring & Observability
 
@@ -170,26 +177,32 @@ Secret VNPay / ngrok chỉ nằm trong `.env` (không commit); `.env.example` đ
   - IPN tới trước return: IPN ghi `PAID`; return verify xong nhận `DUPLICATE`; trang kết quả hiện "Thanh toán thành công" ngay, không qua trạng thái chờ
   - Return tới trước IPN (luôn xảy ra khi không bật tunnel): return ghi `PAID`; IPN tới sau nhận `DUPLICATE` → `RspCode 02` → VNPay dừng gửi lại
   - IPN và return tới đồng thời: xếp hàng ở khoá `orders` FOR UPDATE, bên sau thấy `payment_transactions` đã có → `DUPLICATE`; UNIQUE partial `gateway_txn_no` + UNIQUE `ledger_transactions.idempotency_key` là chốt cuối (`23505` → chạy lại → `DUPLICATE`)
-  - Người mua đóng tab ở cổng, không có IPN: đơn còn chờ; lần xem đơn kế tiếp (trang kết quả, mở từ trang Đơn hàng) gọi `querydr` và ghi nhận; không ai mở thì đơn hết hạn sau 15 phút, tiền nếu có về sau đi nhánh tiền đến muộn
+  - Người mua đóng tab ở cổng, không có IPN: đơn còn chờ; lần xem đơn kế tiếp (trang kết quả, mở từ trang Đơn hàng) gọi `querydr` và ghi nhận; không ai mở thì đơn hết hạn sau 15 phút, tiền nếu có về sau đi phép kiểm tồn kho trong `record()` (mục trên)
   - VNPay gửi lại IPN khi nhận `01` / `04` / `97` / `99` hoặc timeout, dừng khi nhận `00` / `02`; vì vậy chỉ trả `99` cho lỗi tạm thời, còn trùng luôn trả `02`
 - **Đánh dấu sự kiện kết thúc giải phóng ký quỹ**: 1 transaction khoá `events` FOR UPDATE → `COMPLETED` → mọi đơn `PENDING_PAYMENT` của sự kiện thành `EXPIRED` → đọc số dư thực tế của `ESCROW_SELLER` / `ESCROW_FEE` của sự kiện từ view sổ cái (không cộng từ đơn) → 1 giao dịch `EVENT_RELEASE` nhiều dòng chuyển sang `SELLER_PAYABLE` từng người bán và `PLATFORM_FEE_REVENUE`; ký quỹ = 0 thì không tạo giao dịch. Tiền về sau cho đơn của sự kiện thấy `COMPLETED` → `REFUND_REQUIRED`, không bao giờ vào ký quỹ đã đóng — trade-off: giữ khoá sự kiện suốt thao tác làm tạo đơn / ghi nhận của sự kiện đó chờ vài ms — alternatives considered: chặn kết thúc khi còn đơn chờ (spec đã chọn không chặn)
 - **Chữ ký VNPay**: HMAC-SHA512, hex, khoá `VNPAY_HASH_SECRET` (`node:crypto`)
   - URL thanh toán và IPN / return: lấy mọi tham số `vnp_*` trừ `vnp_SecureHash`, `vnp_SecureHashType`, bỏ tham số không có tiền tố `vnp_`, sắp tăng dần theo tên, `key=value` URL-encode kiểu form (khoảng trắng → `+`), nối `&`
-  - Verify trên giá trị đã decode rồi encode lại theo cùng quy tắc, không dùng chuỗi query thô (thứ tự và kiểu encode của client không đảm bảo); 1 key xuất hiện nhiều lần → coi là sai chữ ký
-  - So sánh: chuẩn hoá chữ thường, kiểm độ dài 128, `crypto.timingSafeEqual`
+  - Verify trên giá trị đã decode rồi encode lại theo cùng quy tắc, không dùng chuỗi query thô (thứ tự và kiểu encode của client không đảm bảo); 1 key xuất hiện nhiều lần hoặc giá trị không phải chuỗi → sai chữ ký; chưa cấu hình khoá (`VNPAY_HASH_SECRET` rỗng) → sai chữ ký
+  - Verify thử 2 kiểu chuỗi ký, đúng 1 kiểu là hợp lệ: (1) mọi tham số `vnp_*` kể cả giá trị rỗng; (2) chỉ khi (1) sai và có tham số rỗng — bỏ các tham số `vnp_*` giá trị rỗng khỏi chuỗi ký (một số mẫu code của VNPay ký như vậy). URL thanh toán và script `send-ipn` luôn ký theo kiểu (1)
+  - Sau khi chữ ký hợp lệ, `vnp_PayDate` / `vnp_BankCode` rỗng coi như không gửi (lưu `NULL`)
+  - So sánh: chuẩn hoá chữ thường, kiểm đúng 128 ký tự hex, `crypto.timingSafeEqual` (áp cho cả 2 kiểu chuỗi ký)
   - `querydr`: chuỗi ký request và response nối bằng `|` theo đúng thứ tự trường của tài liệu VNPay; `vnp_TransactionDate` = `orders.vnp_create_date` đã lưu, `vnp_RequestId` 32 ký tự hex ngẫu nhiên mỗi lần
   - URL thanh toán: `vnp_TxnRef` = mã đơn, `vnp_Amount` = `buyer_total` × 100, `vnp_CreateDate` / `vnp_ExpireDate` GMT+7 (`vnp_ExpireDate` = hạn giữ chỗ), `vnp_OrderInfo` = `Thanh toan don <mã đơn>`, `vnp_ReturnUrl` = `VNPAY_RETURN_URL_BASE/<mã đơn>`; lưu ở lần tạo đầu bằng `UPDATE ... WHERE payment_url IS NULL`, các lần sau trả lại đúng URL đó
 - **`querydr` đồng bộ trong `GET /v1/orders/:orderId`, không throttle** (theo spec api § D): lời gọi nằm ngoài transaction DB, `AbortSignal.timeout(5000)`, không retry trong request vì lần hỏi lại kế tiếp của `web` (3 giây) chính là lần thử lại; lỗi / timeout → vẫn trả `PENDING_PAYMENT` — trade-off: mỗi tab đang chờ gọi VNPay tối đa ~40 lần trong 120 giây — alternatives considered: throttle theo đơn (đã bỏ theo quyết định user) — khi nào xem lại: VNPay giới hạn tần suất `querydr` hoặc có nhiều người mua đồng thời → throttle theo đơn + job đối soát định kỳ đơn chờ
 - **Tunnel là service tuỳ chọn**: `tunnel` nằm sau compose profile `tunnel`, `docker compose up` không cần token ngrok mà vẫn đi trọn luồng (return URL + `querydr`); README ghi cách lấy dev domain ngrok, đặt `NGROK_AUTHTOKEN` / `NGROK_DOMAIN`, bật profile và khai IPN URL `https://NGROK_DOMAIN/api/v1/payments/vnpay/ipn` trên portal merchant sandbox — trade-off: khi bật, tunnel mở toàn bộ `/api` (kể cả kết thúc sự kiện) ra Internet, chấp nhận cho bài test local, README ghi rõ — alternatives considered: tunnel bắt buộc (người chấm phải có tài khoản ngrok mới chạy được), cloudflared quick tunnel (hostname đổi mỗi lần, phải sửa IPN URL trên portal) — khi nào xem lại: production → chỉ route IPN công khai, Khu Quản Trị sau đăng nhập + phân quyền
-- **Script gửi IPN có chữ ký để test local**: `apps/api/src/scripts/send-ipn.ts`, chạy `docker compose exec api node dist/scripts/send-ipn.js <mã đơn> <kịch bản>`; ký bằng cùng hàm ký của `api` và gọi `http://localhost:8080/api/v1/payments/vnpay/ipn`, in `RspCode` nhận được so với mong đợi
-  - `success`: sinh `vnp_TransactionNo` mới, số tiền đúng `buyer_total` → `00` (in số giao dịch để dùng lại)
-  - `duplicate --txn <số giao dịch>`: gửi lại y hệt lần thành công → `02`, không ghi sổ thêm
-  - `bad-signature`: đổi 1 ký tự chữ ký → `97`, đơn không đổi
-  - `bad-amount`: ký hợp lệ nhưng `vnp_Amount` lệch → `04`, đơn không đổi
-  - Từ chối chạy khi `APP_ENV=production`, vì script tạo ra "tiền" không có thật trong sổ cái
-- **Web là BFF, trình duyệt không gọi `api`**: Server Component lấy dữ liệu khi dựng trang, Server Action cho thao tác ghi, 1 Route Handler `GET` cho hỏi lại trạng thái đơn; `api` không cần CORS và không bị trình duyệt chạm trực tiếp — trade-off: mọi lời gọi thêm 1 hop qua server Next — alternatives considered: trình duyệt gọi `api` qua nginx `/api` (thêm nginx + CORS / cookie cho `api`), mô hình jose / refresh của skill `nextjs-feature` (không có token để giữ)
-  - Lệch skill `nextjs-feature`: không `next-intl` (1 ngôn ngữ, câu lỗi qua hằng `ERROR_MESSAGES` theo `code`), không `jose` / refresh, `bffFetch` chỉ forward `X-User-Id` + `X-Request-ID`
-  - Khoá `Idempotency-Key` (UUID v4) sinh ở client khi mở khu chọn cho 1 tin bán + số lượng, đổi khi đổi tin / số lượng; hết 15 giây chưa có phản hồi → mở lại nút, lần bấm lại dùng lại khoá cũ nên không tạo đơn thứ hai
+- **Script gửi IPN có chữ ký để test local**: `apps/api/src/scripts/send-ipn.ts`, cú pháp `send-ipn <mã đơn> <số tiền VND> <success|duplicate|bad-signature|bad-amount> [--txn <số>] [--url <ipnUrl>]`
+  - Chạy trong container: `docker compose exec -T api node dist/scripts/send-ipn.js <mã đơn> <số tiền VND> <kịch bản> ...`; chạy ngoài container khi dev: npm script `ipn:send` (`tsx`, đọc `.env` của `apps/api`)
+  - `<số tiền VND>` = `buyerTotal` của đơn (script không đọc DB); ký bằng cùng hàm ký của `api` với `VNPAY_HASH_SECRET` (bắt buộc), `vnp_TmnCode` = `VNPAY_TMN_CODE` hoặc `LOCALTEST`; gửi `GET` tới `--url` nếu có (chỉ `http` / `https`), mặc định `http://localhost:<PORT>/api/v1/payments/vnpay/ipn`, timeout 10 giây
+  - In 1 dòng `scenario`, mã đơn, `txn`, `RspCode` mong đợi / nhận được và `OK` / `MISMATCH`; exit code `0` khi khớp, `1` khi lệch hoặc lỗi
+  - `success`: sinh `vnp_TransactionNo` mới (hoặc lấy `--txn`), số tiền đúng → `00` (in số giao dịch để dùng lại)
+  - `duplicate --txn <số giao dịch>`: bắt buộc `--txn`, gửi lại lần thành công → `02`, không ghi sổ thêm
+  - `bad-signature`: đổi 1 ký tự hex cuối của chữ ký → `97`, đơn không đổi
+  - `bad-amount`: ký hợp lệ nhưng `vnp_Amount` lệch +1.000 VND → `04`, đơn không đổi
+  - Từ chối chạy khi `APP_ENV=production`, vì script tạo ra "tiền" không có thật trong sổ cái; không in khoá, không in URL / tham số đã ký (chứa `vnp_TmnCode`)
+- **Web là BFF, trình duyệt không gọi `api`**: Server Component lấy dữ liệu khi dựng trang; Client Component gọi Route Handler `/bff/*` qua TanStack Query (`bffFetch`) cho tạo đơn, lấy URL thanh toán, hỏi lại trạng thái đơn, tạm tính, kết thúc sự kiện; Server Action chỉ còn cho chọn / xoá tài khoản (set cookie); `api` không cần CORS và không bị trình duyệt chạm trực tiếp — trade-off: mọi lời gọi thêm 1 hop qua server Next, và Route Handler phải tự chặn CSRF (§ Auth & Authz) — alternatives considered: trình duyệt gọi `api` qua nginx `/api` (thêm nginx + CORS / cookie cho `api`), Server Action cho mọi thao tác ghi, mô hình jose / refresh của skill `nextjs-feature` (không có token để giữ)
+  - Lệch skill `nextjs-feature`: không `next-intl` (1 ngôn ngữ, câu lỗi qua hằng `ERROR_MESSAGES` theo `code`), không `jose` / refresh; lớp gọi `api` server-side (`apiFetch`) chỉ gắn `X-User-Id` (từ cookie) + `X-Request-ID`, không forward cookie trình duyệt
+  - Timeout: `apiFetch` cắt lời gọi `api` sau 15 giây (BFF trả `504` kèm envelope), `bffFetch` ở trình duyệt cắt sau 20 giây để luôn nhận được envelope của BFF trước
+  - Khoá `Idempotency-Key` (UUID v4) sinh ở client cho 1 tin bán + số lượng, đổi khi đổi tin / số lượng; lỗi (kể cả timeout) → mở lại nút, lần bấm lại dùng lại khoá cũ nên không tạo đơn thứ hai; chỉ đổi khoá khi `api` báo khoá đã gắn với đơn không còn thanh toán được (`IDEMPOTENCY_KEY_REUSED`, `ORDER_NOT_PAYABLE`, `ORDER_NOT_FOUND`)
 - **Fastify 5 + Kysely cho `api`**: schema Zod làm validator + serializer, `pino` có sẵn, `app.inject()` test HTTP trên Postgres thật không mở port — trade-off: không có skill `node-feature` trong repo, convention `api` theo rule chung (`policy-*`, `stack-ts`) — alternatives considered: Express 5 (không có schema / serializer), NestJS (nặng cho ~15 endpoint), Hono (hệ plugin Node kém hơn) — khi nào xem lại: không
 - **Job hết hạn chạy trong process `api`**: `croner` mỗi 60 giây, không Redis / queue (rule `policy-cache-queue` § Queue: việc định kỳ → schedule lib); độ trễ của job không ảnh hưởng tồn kho vì số vé còn lại đã loại đơn quá hạn — trade-off: job dừng khi `api` dừng — alternatives considered: BullMQ repeatable job (thêm Redis), `pg_cron` (extension ngoài image chuẩn) — khi nào xem lại: chạy > 1 instance `api` → vẫn an toàn nhờ `SKIP LOCKED`, chỉ tốn thêm truy vấn
 - **Không sinh OpenAPI** (quyết định user): `web` là client duy nhất, ~15 endpoint — trade-off: type của `web` có thể lệch schema `api` mà không có CI bắt (lệch rule `policy-isolation` § Contract) — alternatives considered: `@fastify/swagger` export `specs/api/openapi.json` + `gen:api` — khi nào xem lại: thêm client thứ hai (mobile, admin tách riêng) hoặc lệch type gây bug

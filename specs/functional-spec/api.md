@@ -218,6 +218,7 @@
 - Mã đơn sai dạng: trả 400 + `VALIDATION_FAILED`, `details` gồm field `orderId`
 - Mã đơn không tồn tại: trả 404 + `ORDER_NOT_FOUND`
 - Tra cứu cổng lỗi hoặc quá 5 giây: vẫn trả 200 + trạng thái hiện tại `PENDING_PAYMENT`, không báo lỗi cho client
+- Ghi nhận kết quả tra cứu lỗi (số tiền lệch, lỗi ghi dữ liệu): ghi log, không thay đổi dữ liệu, vẫn trả 200 + trạng thái hiện tại của đơn
 
 **Kiểm tra dữ liệu**:
 - `orderId`: bắt buộc, 12–20 ký tự, regex `^[A-Za-z0-9]+$`
@@ -225,8 +226,8 @@
 **Quy tắc nghiệp vụ**:
 - Trạng thái chỉ lấy từ dữ liệu đơn đã ghi nhận trong hệ thống (qua § D Ghi Nhận Kết Quả Thanh Toán)
 - Đơn `PENDING_PAYMENT` đã quá thời điểm hết hạn giữ chỗ: chuyển `EXPIRED` ngay trong yêu cầu này theo § C Hết Hạn Đơn Hàng rồi mới trả kết quả
-- Điều kiện tra cứu cổng: đơn `PENDING_PAYMENT` còn hạn giữ chỗ và đã tạo URL thanh toán; tra cứu chạy đồng bộ, tối đa 5 giây; có kết quả thanh toán cuối cùng thì xử lý theo § D Ghi Nhận Kết Quả Thanh Toán trước khi trả trạng thái
-- `retryAfterSeconds` cố định = 3: gợi ý client gọi lại sau 3 giây để tự cập nhật khi đơn đang chờ xác nhận
+- Điều kiện tra cứu cổng: đơn `PENDING_PAYMENT` còn hạn giữ chỗ (sau khi áp hết hạn tại chỗ) và đã tạo URL thanh toán; mỗi lần xem đơn thoả điều kiện gọi tra cứu đúng một lần, chạy đồng bộ, tối đa 5 giây, không giữ khoá dữ liệu nào trong lúc chờ cổng; có kết quả thanh toán cuối cùng thì xử lý theo § D Ghi Nhận Kết Quả Thanh Toán rồi đọc lại đơn trước khi trả trạng thái
+- `retryAfterSeconds` cố định = 3 khi đơn `PENDING_PAYMENT` (rỗng với trạng thái khác): gợi ý client gọi lại sau 3 giây để tự cập nhật khi đơn đang chờ xác nhận
 - Đọc nhiều lần không đổi kết quả nếu không có sự kiện thanh toán mới
 - Mọi người dùng xem được mọi đơn theo mã đơn, không cần `X-User-Id`
 - Người mua (mã, tên hiển thị) lấy từ mã người mua snapshot trên đơn và tên hiển thị hiện tại của người dùng đó
@@ -269,17 +270,19 @@
 
 **Luồng chính**:
 1. Tác vụ định kỳ của hệ thống kích hoạt, hoặc một yêu cầu đọc đơn gặp đơn `PENDING_PAYMENT` đã quá thời điểm hết hạn giữ chỗ
-2. Hệ thống khoá từng đơn quá hạn, chuyển trạng thái `EXPIRED`, ghi thời điểm hết hạn thực tế — trả số đơn đã chuyển (tác vụ nội bộ, không có phản hồi HTTP)
+2. Hệ thống chuyển các đơn quá hạn sang `EXPIRED` theo lô (tác vụ định kỳ) hoặc chuyển đơn đang được đọc (yêu cầu đọc), ghi thời điểm hết hạn thực tế — trả số đơn đã chuyển (tác vụ nội bộ, không có phản hồi HTTP)
 
 **Trường hợp ngoại lệ**:
 - Đơn đã được ghi nhận thanh toán / thất bại ngay trước khi khoá (đã rời `PENDING_PAYMENT`): bỏ qua đơn đó, không đổi trạng thái
-- Lỗi khi xử lý một đơn: bỏ qua đơn đó, ghi log, lần chạy sau xử lý lại; không ảnh hưởng các đơn khác
+- Đơn đang bị khoá bởi ghi nhận thanh toán hoặc đánh dấu sự kiện kết thúc: tác vụ định kỳ bỏ qua đơn đó trong lượt này, luồng đang giữ khoá tự quyết trạng thái
+- Lỗi khi xử lý một lô: cả lô không thay đổi, ghi log, lượt chạy sau xử lý lại các đơn còn quá hạn
 
 **Kiểm tra dữ liệu**:
 - Điều kiện chọn đơn: trạng thái `PENDING_PAYMENT` và thời điểm hết hạn giữ chỗ ≤ thời điểm hiện tại
 
 **Quy tắc nghiệp vụ**:
-- Tác vụ chạy mỗi 60 giây; vì số vé còn lại đã không tính đơn quá hạn (§ C Tạo Đơn Hàng), độ trễ của tác vụ không làm giữ chỗ quá 15 phút
+- Tác vụ định kỳ xử lý theo lô, mỗi lô tối đa 500 đơn chuyển trong một thao tác nguyên tử; lô đầy 500 thì chạy tiếp lô sau trong cùng lượt tới khi hết đơn quá hạn
+- Tác vụ chạy mỗi 60 giây, lượt trước chưa xong thì bỏ lượt mới; vì số vé còn lại đã không tính đơn quá hạn (§ C Tạo Đơn Hàng), độ trễ của tác vụ không làm giữ chỗ quá 15 phút
 - Hết hạn không ghi sổ cái (chưa có tiền vào)
 - Chuyển hết hạn là idempotent: đơn đã `EXPIRED` không bị xử lý lại
 - Đơn `EXPIRED` vẫn có thể nhận thanh toán đến muộn, xử lý theo § D Ghi Nhận Kết Quả Thanh Toán
@@ -331,7 +334,7 @@
 2. Hệ thống xác thực chữ ký, đối chiếu mã đơn và số tiền rồi ghi nhận theo § D Ghi Nhận Kết Quả Thanh Toán — trả 200 + mã phản hồi cổng `00` (đã xác nhận)
 
 **Trường hợp ngoại lệ**:
-- Chữ ký sai hoặc thiếu chữ ký: trả 200 + mã phản hồi cổng `97`, không đổi trạng thái đơn, không ghi sổ cái, ghi log cảnh báo
+- Chữ ký sai hoặc thiếu chữ ký, một tham số `vnp_*` xuất hiện nhiều lần, hoặc thiếu cấu hình khoá bí mật của cổng: trả 200 + mã phản hồi cổng `97`, không đổi trạng thái đơn, không ghi sổ cái, ghi log cảnh báo
 - Mã đơn không tồn tại: trả 200 + mã phản hồi cổng `01`, không ghi sổ cái
 - Số tiền khác `buyerTotal` của đơn (sau khi chia 100): trả 200 + mã phản hồi cổng `04`, không đổi trạng thái đơn, không ghi sổ cái, ghi log cảnh báo
 - § D Ghi Nhận Kết Quả Thanh Toán trả `DUPLICATE` (giao dịch thành công có mã giao dịch tại cổng đã ghi nhận, hoặc kết quả thất bại tới đơn đã rời `PENDING_PAYMENT`): trả 200 + mã phản hồi cổng `02` (đơn đã xác nhận), không ghi sổ cái lại, không đổi trạng thái
@@ -344,10 +347,13 @@
 - Mã phản hồi (`vnp_ResponseCode`), trạng thái giao dịch (`vnp_TransactionStatus`): bắt buộc, chuỗi 2 chữ số
 - Mã giao dịch tại cổng (`vnp_TransactionNo`): bắt buộc, chuỗi số, 1–20 ký tự
 - Chữ ký (`vnp_SecureHash`): bắt buộc, chuỗi hex 128 ký tự
+- Mã ngân hàng (`vnp_BankCode`): tuỳ chọn, ≤ 20 ký tự; giá trị rỗng coi như không gửi
+- Thời điểm thanh toán (`vnp_PayDate`): tuỳ chọn, `yyyyMMddHHmmss` theo GMT+7 và là ngày giờ có thật; giá trị rỗng coi như không gửi (không trả `99`)
 - Thiếu hoặc sai dạng trường sau khi chữ ký hợp lệ: trả 200 + mã phản hồi cổng `99`, không thay đổi dữ liệu
 
 **Quy tắc nghiệp vụ**:
 - Xác thực chữ ký: lấy mọi tham số nhận được có tiền tố `vnp_` trừ `vnp_SecureHash` và `vnp_SecureHashType`, bỏ qua mọi tham số không có tiền tố `vnp_`; sắp xếp theo tên tăng dần, ký HMAC-SHA512 bằng khoá bí mật theo giao thức cổng; so sánh với `vnp_SecureHash` không phân biệt hoa thường, bằng phép so sánh thời gian hằng
+- Chuỗi ký chấp nhận hai kiểu, thử theo thứ tự: (1) gồm mọi tham số `vnp_*` kể cả tham số có giá trị rỗng; (2) nếu (1) không khớp và có tham số `vnp_*` giá trị rỗng, thử lại với các tham số rỗng bị bỏ khỏi chuỗi ký; một trong hai khớp là chữ ký hợp lệ
 - Thứ tự kiểm tra cố định: chữ ký → mã đơn → số tiền → ghi nhận (gồm chống trùng); dừng ở bước đầu tiên thất bại
 - Không tin bất kỳ dữ liệu nào trước khi chữ ký hợp lệ
 - Thanh toán thành công khi đồng thời mã phản hồi = `00` và trạng thái giao dịch = `00`; mọi tổ hợp khác là thất bại
@@ -375,6 +381,7 @@
 **Kiểm tra dữ liệu**:
 - Mã yêu cầu tra cứu: hệ thống sinh, duy nhất mỗi lần tra cứu, ≤ 32 ký tự chữ và số
 - Thời điểm tạo giao dịch gửi cổng: đúng chuỗi `vnp_CreateDate` (`yyyyMMddHHmmss`, GMT+7) đã lưu trên đơn khi tạo URL thanh toán, không tính lại
+- Trường kết quả tra cứu kiểm cùng dạng với § D Nhận Thông Báo Thanh Toán; `vnp_BankCode` và `vnp_PayDate` rỗng coi như không gửi
 
 **Quy tắc nghiệp vụ**:
 - Kết quả cuối cùng xác định theo trạng thái giao dịch (`vnp_TransactionStatus`) trong kết quả tra cứu: `00` → thành công, `02` → thất bại; mã khác không phải kết quả cuối cùng, không đổi trạng thái đơn
@@ -401,15 +408,15 @@
 
 **Quy tắc nghiệp vụ**:
 - Kết quả thành công:
-  - Đơn `PENDING_PAYMENT` chưa quá hạn giữ chỗ và sự kiện `ON_SALE`: chuyển `PAID`, ghi thời điểm thanh toán, vé đang giữ chỗ thành vé đã bán; ghi bút toán `PAYMENT_CAPTURED`
-  - Đơn `PENDING_PAYMENT` đã quá hạn giữ chỗ (tác vụ hết hạn chưa chạy), hoặc đơn `EXPIRED`, hoặc đơn `FAILED` (thanh toán đến muộn):
-    - Sự kiện `ON_SALE` và số vé còn lại của tin bán (không tính đơn này) ≥ số lượng của đơn: giữ lại vé, chuyển `PAID`; ghi bút toán `PAYMENT_CAPTURED`
+  - Đơn chưa `PAID` / `REFUND_REQUIRED` (`PENDING_PAYMENT` còn hạn hoặc đã quá hạn, `EXPIRED`, `FAILED`): không có nhánh tắt cho đơn còn hạn giữ chỗ, mọi đơn đều kiểm số vé còn lại khi sự kiện `ON_SALE`
+    - Số vé còn lại đếm khi đã giữ khoá tin bán, không tính chính đơn này; hạn giữ chỗ của các đơn khác so với thời điểm câu lệnh đếm (sau khi đã có khoá), không so với thời điểm bắt đầu thao tác
+    - Sự kiện `ON_SALE` và số vé còn lại ≥ số lượng của đơn: chuyển `PAID`, ghi thời điểm thanh toán, vé của đơn thành vé đã bán; ghi bút toán `PAYMENT_CAPTURED`
     - Sự kiện `COMPLETED` hoặc không đủ vé: chuyển `REFUND_REQUIRED`, không giữ vé, số tiền cần hoàn = số tiền đã nhận; ghi bút toán `PAYMENT_REFUND_REQUIRED`
   - Đơn `PAID` hoặc `REFUND_REQUIRED` nhận thêm một giao dịch thành công khác (mã giao dịch tại cổng khác): giữ nguyên trạng thái đơn, ghi bút toán `PAYMENT_REFUND_REQUIRED` cho khoản thanh toán thừa, cộng vào số tiền cần hoàn của đơn, ghi log cảnh báo
 - Kết quả thất bại:
   - Đơn `PENDING_PAYMENT`: chuyển `FAILED`, trả vé đang giữ chỗ về tin bán; không ghi sổ cái; trả `RECORDED`
 - Tiền đã được cổng xác nhận luôn được ghi vào sổ cái, không bao giờ bị bỏ qua
-- Kiểm tra số vé còn lại khi thanh toán đến muộn tuần tự hoá theo tin bán cùng cơ chế với § C Tạo Đơn Hàng
+- Kiểm tra số vé còn lại khi ghi nhận thanh toán thành công tuần tự hoá theo tin bán cùng cơ chế với § C Tạo Đơn Hàng
 - Kiểm tra trạng thái sự kiện tuần tự hoá với § F Đánh Dấu Sự Kiện Kết Thúc: ghi nhận xảy ra trước khi sự kiện kết thúc thì tiền nằm trong ký quỹ và được giải phóng; xảy ra sau thì đơn đã bị chuyển `EXPIRED` và đi nhánh `REFUND_REQUIRED`
 - Khoá chống trùng: mã giao dịch tại cổng (`vnp_TransactionNo`) là UNIQUE toàn hệ thống chỉ trên các giao dịch thành công; giao dịch thất bại không chịu ràng buộc này (cổng có thể trả cùng mã, vd `0`, cho nhiều giao dịch thất bại)
 - Ba nguồn dùng chung đúng một hành động ghi nhận này với cùng quy tắc và cùng khoá chống trùng; nguồn nào tới trước ghi nhận, nguồn tới sau với cùng mã giao dịch tại cổng nhận `DUPLICATE`; hai nguồn tới đồng thời được tuần tự hoá trên khoá đơn
@@ -440,11 +447,11 @@
 - Mã phản hồi (`vnp_ResponseCode`), trạng thái giao dịch (`vnp_TransactionStatus`): bắt buộc, chuỗi 2 chữ số
 - Mã giao dịch tại cổng (`vnp_TransactionNo`): bắt buộc, chuỗi số, 1–20 ký tự
 - Chữ ký (`vnp_SecureHash`): bắt buộc, chuỗi hex 128 ký tự
-- Mã ngân hàng (`vnp_BankCode`): tuỳ chọn, ≤ 20 ký tự
-- Thời điểm thanh toán (`vnp_PayDate`): tuỳ chọn, `yyyyMMddHHmmss` theo GMT+7
+- Mã ngân hàng (`vnp_BankCode`): tuỳ chọn, ≤ 20 ký tự; giá trị rỗng coi như không gửi
+- Thời điểm thanh toán (`vnp_PayDate`): tuỳ chọn, `yyyyMMddHHmmss` theo GMT+7 và là ngày giờ có thật; giá trị rỗng coi như không gửi
 
 **Quy tắc nghiệp vụ**:
-- Xác thực chữ ký cùng thuật toán với § D Nhận Thông Báo Thanh Toán: lấy mọi tham số `vnp_*` trừ `vnp_SecureHash` và `vnp_SecureHashType`, bỏ tham số không có tiền tố `vnp_`, sắp xếp theo tên tăng dần, ký HMAC-SHA512 bằng khoá bí mật; ký trên giá trị đã giải mã rồi mã hoá lại theo cùng quy tắc, không dùng chuỗi tham số thô client gửi; so sánh không phân biệt hoa thường, bằng phép so sánh thời gian hằng
+- Xác thực chữ ký cùng thuật toán với § D Nhận Thông Báo Thanh Toán: lấy mọi tham số `vnp_*` trừ `vnp_SecureHash` và `vnp_SecureHashType`, bỏ tham số không có tiền tố `vnp_`, sắp xếp theo tên tăng dần, ký HMAC-SHA512 bằng khoá bí mật; chấp nhận cùng hai kiểu chuỗi ký (kèm tham số rỗng trước, bỏ tham số rỗng sau); ký trên giá trị đã giải mã rồi mã hoá lại theo cùng quy tắc, không dùng chuỗi tham số thô client gửi; so sánh không phân biệt hoa thường, bằng phép so sánh thời gian hằng
 - Thứ tự kiểm tra cố định: chữ ký → mã đơn → số tiền → ghi nhận (gồm chống trùng); dừng ở bước đầu tiên thất bại
 - Không tin bất kỳ dữ liệu nào trước khi chữ ký hợp lệ; client chỉ chuyển tiếp, không tự quyết kết quả thanh toán
 - Thanh toán thành công khi đồng thời mã phản hồi = `00` và trạng thái giao dịch = `00`; mọi tổ hợp khác là thất bại (cùng quy tắc IPN)
@@ -584,7 +591,7 @@
 
 **Luồng chính**:
 1. Client gửi yêu cầu đánh dấu sự kiện kết thúc kèm mã sự kiện
-2. Hệ thống trong một thao tác nguyên tử khoá sự kiện, chuyển `COMPLETED` (ghi thời điểm kết thúc), chuyển mọi đơn `PENDING_PAYMENT` của sự kiện sang `EXPIRED` và ghi bút toán `EVENT_RELEASE` theo § E Ghi Bút Toán — trả 200 + mã sự kiện, trạng thái `COMPLETED`, thời điểm kết thúc, số đơn chờ thanh toán đã chuyển hết hạn, danh sách số tiền đã giải phóng theo từng người bán (mã, tên, số tiền), tổng phí sàn đã chuyển doanh thu, mã giao dịch sổ cái (rỗng nếu không có tiền ký quỹ)
+2. Hệ thống trong một thao tác nguyên tử khoá sự kiện, chuyển `COMPLETED` (ghi thời điểm kết thúc), chuyển mọi đơn `PENDING_PAYMENT` của sự kiện sang `EXPIRED` và ghi bút toán `EVENT_RELEASE` theo § E Ghi Bút Toán — trả 200 + mã sự kiện, trạng thái `COMPLETED`, thời điểm kết thúc, số đơn chờ thanh toán đã chuyển hết hạn, tổng tiền đã giải phóng (= tổng theo người bán + phí sàn), danh sách số tiền đã giải phóng theo từng người bán (mã, tên, số tiền), tổng phí sàn đã chuyển doanh thu, mã giao dịch sổ cái (rỗng nếu không có tiền ký quỹ)
 
 **Trường hợp ngoại lệ**:
 - Thiếu hoặc sai mã sự kiện: trả 400 + `VALIDATION_FAILED`, `details` gồm field `eventId`
