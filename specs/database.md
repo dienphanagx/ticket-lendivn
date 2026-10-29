@@ -2,7 +2,7 @@
 
 ## TÓM TẮT
 
-- **Database**: PostgreSQL 18 (service `db` trong Docker Compose; DB `ticket` cho app, DB `ticket_test` cho test)
+- **Database**: PostgreSQL 18 trong Docker Compose: service `db` chứa DB `ticket` cho app; service `db-test` riêng (compose profile `test`, dữ liệu trên tmpfs) chứa DB `ticket_test` cho test
 - **Query layer**: Kysely 0.29 + driver `pg` (type DB viết tay), DDL / trigger bằng `sql` template trong migration
 - **Bảng chính**: `users`, `events`, `listings`, `orders`, `payment_transactions`, `ledger_accounts`, `ledger_transactions`, `ledger_entries` + view `ledger_account_balances`
 
@@ -394,7 +394,7 @@ Mọi FK là `ON DELETE NO ACTION`: không xoá được người dùng / sự k
   - Naming: `apps/api/src/db/migrations/YYYYMMDDHHmm_verb_subject.ts` (vd `202610271200_create_ledger.ts`), mỗi file export `up`; DDL, trigger, view viết bằng `sql` template
   - Zero-downtime: thêm cột nullable → backfill → thêm NOT NULL ở migration sau
   - Drop cột/bảng ở release sau release đã bỏ code dùng nó
-  - Forward-only (rule `destructive-ops`): sai schema → viết migration mới để sửa; không viết `down`, DB test được dựng lại bằng `migrate` trên DB trống
+  - Forward-only (rule `destructive-ops`): sai schema → viết migration mới để sửa; không viết `down`; DB `ticket_test` nằm trên tmpfs nên mỗi lần dựng `db-test` là DB trống, `migrate` áp lại từ đầu
   - Mỗi migration chạy trong 1 transaction (DDL của PostgreSQL có transaction), lỗi giữa chừng không để schema nửa vời
 - **Transaction boundary**: mở ở service layer; repository nhận `trx` (`Kysely<DB>` hoặc `Transaction<DB>`) làm tham số, không tự mở transaction — helper: `db.transaction().setIsolationLevel('read committed').execute(async (trx) => { ... })`
   - Isolation READ COMMITTED + khoá hàng tường minh (`.forShare()`, `.forUpdate()`); sau khi chờ khoá, mỗi câu lệnh đọc snapshot mới nên thấy dữ liệu bên trước vừa commit
@@ -407,7 +407,9 @@ Mọi FK là `ON DELETE NO ACTION`: không xoá được người dùng / sự k
   - Dữ liệu nền trong migration: 2 tài khoản sàn `GATEWAY_CASH`, `PLATFORM_FEE_REVENUE`; code vẫn upsert mọi loại tài khoản nên thiếu cũng tự tạo lại
   - Idempotent: UUID cố định + `INSERT ... ON CONFLICT (id) DO NOTHING`, chạy lại mỗi lần container start không lỗi, không ghi đè dữ liệu đã đổi (sự kiện đã `COMPLETED` giữ nguyên)
   - Admin đầu tiên: không có — không đăng nhập, Khu Quản Trị mở cho mọi người dùng
-  - Test: DB `ticket_test`; mỗi test `TRUNCATE ... CASCADE` mọi bảng rồi nạp fixture riêng (TRUNCATE không kích hoạt trigger chặn UPDATE / DELETE)
+  - Test: DB `ticket_test` ở service riêng `db-test` (`postgres:18-alpine`, compose profile `test`, dữ liệu trên tmpfs, không volume); service `db` dev chỉ chứa DB `ticket` — lý do: rule `destructive-ops` § Database (không bao giờ dùng DB dev làm DB test, `TRUNCATE` chỉ trên DB test ephemeral)
+    - Guard tên DB đuôi `_test` 2 lớp trước mọi migrate / `TRUNCATE`: (1) đọc `DATABASE_URL`, in host + tên DB, tên sai → throw trước khi kết nối; (2) `SELECT current_database()` trên kết nối thật, sai → throw
+    - Mỗi test `TRUNCATE ... CASCADE` mọi bảng rồi nạp fixture riêng (TRUNCATE không kích hoạt trigger chặn UPDATE / DELETE)
 
 ### Các Quyết Định Kỹ Thuật
 
@@ -419,18 +421,21 @@ Mọi FK là `ON DELETE NO ACTION`: không xoá được người dùng / sự k
   - Lịch sử của `u` = mọi `ledger_entries` của tài khoản có `owner_user_id = u`; số tiền có dấu = `+amount` khi `direction = normal_side`, ngược lại `−amount`; loại số dư = `PENDING` với `ESCROW_SELLER`, `AVAILABLE` với 2 loại còn lại → cộng mọi dòng cùng loại ra đúng số dư đó
   - `escrowTotal` của sự kiện `e` = Σ `bal(ESCROW_SELLER *, e)` + `bal(ESCROW_FEE e)` = đúng số tiền `EVENT_RELEASE` sẽ chuyển; `sellerCount` = số `ESCROW_SELLER` của `e` có `bal > 0`
   - Bất biến toàn sổ: Σ nợ = Σ có trên mọi dòng (hệ quả của từng giao dịch cân), nên `bal(GATEWAY_CASH)` = Σ `bal` mọi tài khoản `CREDIT`; trang sổ cái hiển thị cả 2 vế và test kiểm sau mỗi kịch bản
-- **Cân bằng kiểm ở DB bằng constraint trigger deferred**: hàm `ledger_assert_balanced(txn_id)` kiểm giao dịch có ≥ 2 dòng và Σ nợ = Σ có, sai → `RAISE EXCEPTION 'LEDGER_UNBALANCED'` (`ERRCODE = 'check_violation'`)
-  - Gắn 2 `CONSTRAINT TRIGGER ... AFTER INSERT ... DEFERRABLE INITIALLY DEFERRED FOR EACH ROW`: trên `ledger_entries` (kiểm `NEW.transaction_id`) và trên `ledger_transactions` (kiểm `NEW.id`, bắt giao dịch không có dòng nào)
+- **Cân bằng kiểm ở DB bằng constraint trigger deferred**: hàm `ledger_assert_balanced(txn_id)` kiểm giao dịch có ≥ 2 dòng và Σ nợ = Σ có, sai → `RAISE EXCEPTION 'LEDGER_UNBALANCED'` (`ERRCODE = 'check_violation'`, SQLSTATE `23514`)
+  - Gắn 2 `CONSTRAINT TRIGGER ... AFTER INSERT ... DEFERRABLE INITIALLY DEFERRED FOR EACH ROW`: `ledger_entries_balanced` trên `ledger_entries` (kiểm `NEW.transaction_id`) và `ledger_transactions_balanced` trên `ledger_transactions` (kiểm `NEW.id`, bắt giao dịch không có dòng nào)
   - Deferred nên chạy lúc COMMIT, sau khi mọi dòng của giao dịch đã chèn; lệch thì cả transaction (đơn, trạng thái, bút toán) rollback
   - Code `api` kiểm trước khi chèn để log `LEDGER_UNBALANCED` có ngữ cảnh (spec api § E); trigger là chốt cuối khi code sai — test chèn thẳng 1 giao dịch lệch bằng SQL và chờ COMMIT lỗi
   - Trade-off: N dòng → N lần kiểm lúc commit (mỗi lần SUM vài dòng) — alternatives considered: chỉ kiểm ở code (bug code là sổ lệch), CHECK constraint (không nhìn được nhiều dòng)
-- **Không thêm dòng vào giao dịch đã commit**: trigger `ledger_txn_stamp` (BEFORE INSERT `ledger_transactions`) ép `created_xid = pg_current_xact_id()`, `created_at = now()`; trigger `ledger_entry_guard` (BEFORE INSERT `ledger_entries`) từ chối nếu `created_xid` của giao dịch cha ≠ `pg_current_xact_id()` và ép `created_at` = của giao dịch cha — lý do: thiếu chốt này, một cặp dòng cân thêm sau vẫn qua kiểm cân bằng nhưng đã sửa lịch sử — alternatives considered: so `created_at = now()` (dựa vào trùng micro giây)
-- **Bất biến**: trigger `ledger_reject_mutation` BEFORE UPDATE OR DELETE FOR EACH ROW trên `ledger_transactions`, `ledger_entries`, `payment_transactions` → `RAISE EXCEPTION 'LEDGER_IMMUTABLE'`; sai sót sửa bằng giao dịch bù (phạm vi hiện tại chưa có loại điều chỉnh) — trade-off: TRUNCATE và DDL của owner không bị chặn (cần cho reset test) — alternatives considered: REVOKE UPDATE / DELETE với role runtime riêng (đã bỏ theo quyết định user) — khi nào xem lại: lên production → tách role `app_owner` / `app_runtime`, REVOKE UPDATE, DELETE, TRUNCATE trên các bảng này
+- **Không thêm dòng vào giao dịch đã commit**: trigger `ledger_txn_stamp` (BEFORE INSERT `ledger_transactions`) ép `created_xid = pg_current_xact_id()`, `created_at = now()`; trigger `ledger_entry_guard` (BEFORE INSERT `ledger_entries`) ép `created_at` = của giao dịch cha và từ chối bằng `RAISE EXCEPTION 'LEDGER_TRANSACTION_CLOSED'` (`ERRCODE = 'check_violation'`) khi `created_xid` của giao dịch cha ≠ `pg_current_xact_id()`
+  - Fail-closed: không thấy giao dịch cha cũng từ chối, vì transaction luôn thấy dòng chính nó chèn nên "không thấy cha" = cha thuộc transaction khác chưa commit (khe race trước khi FK kiểm) hoặc không tồn tại; migration `202610291000_ledger_entry_guard_fail_closed` thay hàm `ledger_entry_guard` bằng `CREATE OR REPLACE FUNCTION`
+  - Lý do: thiếu chốt này, một cặp dòng cân thêm sau vẫn qua kiểm cân bằng nhưng đã sửa lịch sử — alternatives considered: so `created_at = now()` (dựa vào trùng micro giây)
+- **Bất biến**: trigger `ledger_reject_mutation` BEFORE UPDATE OR DELETE FOR EACH ROW trên `ledger_transactions`, `ledger_entries`, `payment_transactions` → `RAISE EXCEPTION 'LEDGER_IMMUTABLE'` (`ERRCODE = 'restrict_violation'`, SQLSTATE `23001`); sai sót sửa bằng giao dịch bù (phạm vi hiện tại chưa có loại điều chỉnh) — trade-off: TRUNCATE và DDL của owner không bị chặn (cần cho reset test) — alternatives considered: REVOKE UPDATE / DELETE với role runtime riêng (đã bỏ theo quyết định user) — khi nào xem lại: lên production → tách role `app_owner` / `app_runtime`, REVOKE UPDATE, DELETE, TRUNCATE trên các bảng này
 - **Tài khoản sổ cái tạo khi phát sinh tiền**: `INSERT ... ON CONFLICT ON CONSTRAINT ledger_accounts_key_uq DO NOTHING` rồi `SELECT id` trong cùng transaction; 2 giao dịch cùng tạo 1 tài khoản → bên sau chờ bên trước commit rồi `DO NOTHING`, câu `SELECT` kế tiếp thấy dòng đã có; CHECK hình dạng chủ sở hữu + `normal_side` theo loại làm DB từ chối tài khoản sai loại — alternatives considered: tạo sẵn mọi tài khoản trong seed (thiếu khi có người bán / sự kiện mới), `UNIQUE` thường (NULL khác nhau → 2 tài khoản `GATEWAY_CASH`)
 - **Snapshot tiền trên đơn có CHECK công thức**: 6 cột tiền của `orders` bị CHECK ràng buộc lẫn nhau (`seller_net + platform_fee = buyer_total` suy ra từ các CHECK), nên `PAYMENT_CAPTURED` dùng snapshot luôn cân; module phí thuần ở `api` tính trước, DB từ chối nếu code tính sai — ví dụ kiểm: 500.000 × 2 → 1.100.000 / 950.000 / 150.000; 333.333 × 1 → 366.666 / 316.667 / 49.999
 - **State machine của đơn ở DB**: trigger `order_guard_transition` (BEFORE UPDATE `orders`):
-  - Chỉ cho các cạnh `PENDING_PAYMENT` → `PAID` / `FAILED` / `EXPIRED` / `REFUND_REQUIRED`; `EXPIRED` → `PAID` / `REFUND_REQUIRED`; `FAILED` → `PAID` / `REFUND_REQUIRED`; `PAID`, `REFUND_REQUIRED` là trạng thái cuối
-  - Từ chối mọi thay đổi ở cột snapshot (`buyer_id`, `seller_id`, `listing_id`, `event_id`, `quantity`, 7 cột tiền, `idempotency_key`, `hold_expires_at`) và ở `payment_url` / `vnp_create_date` khi đã có giá trị
+  - Chỉ cho các cạnh `PENDING_PAYMENT` → `PAID` / `FAILED` / `EXPIRED` / `REFUND_REQUIRED`; `EXPIRED` → `PAID` / `REFUND_REQUIRED`; `FAILED` → `PAID` / `REFUND_REQUIRED`; `PAID`, `REFUND_REQUIRED` là trạng thái cuối; cạnh khác → `RAISE EXCEPTION 'ORDER_INVALID_TRANSITION'` (`ERRCODE = 'check_violation'`)
+  - Từ chối mọi thay đổi ở cột snapshot (`buyer_id`, `seller_id`, `listing_id`, `event_id`, `quantity`, 7 cột tiền, `idempotency_key`, `hold_expires_at`) và ở `payment_url` / `vnp_create_date` khi đã có giá trị → `RAISE EXCEPTION 'ORDER_SNAPSHOT_IMMUTABLE'` (`ERRCODE = 'check_violation'`)
+  - Sự kiện: trigger `event_guard_transition` (BEFORE UPDATE `events`) chặn `COMPLETED` → trạng thái khác bằng `RAISE EXCEPTION 'EVENT_INVALID_TRANSITION'` (`ERRCODE = 'check_violation'`)
   - Cạnh nào được đi trong hoàn cảnh nào (còn hạn, còn vé, sự kiện còn bán) do service quyết định dưới khoá — xem `specs/architecture.md` § Các Quyết Định Kỹ Thuật → "Ghi nhận thanh toán"
   - Trade-off: thêm 1 hàm PL/pgSQL phải giữ đồng bộ với enum — alternatives considered: chỉ kiểm ở code (UPDATE sai từ chỗ khác lọt qua)
 - **Chống bán trùng: tồn kho tính từ đơn, tuần tự hoá bằng khoá tin bán**: số vé còn lại = `quantity_total` − Σ `quantity` của đơn cùng tin có `status = 'PAID'` hoặc (`status = 'PENDING_PAYMENT'` và `hold_expires_at > now()`); mọi thao tác làm giảm số còn lại (tạo đơn, chuyển `PAID` cho tiền đến muộn) chạy sau `SELECT ... FROM listings ... FOR UPDATE`, nên 2 người mua cùng tin bán xếp hàng và người sau thấy vé người trước vừa giữ. `now()` là giờ bắt đầu transaction: sau khi chờ khoá, đơn vừa quá hạn trong lúc chờ vẫn bị tính là đang giữ → sai về phía an toàn (từ chối thừa, không bán quá). Trình tự khoá từng luồng:

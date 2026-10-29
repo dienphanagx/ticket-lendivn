@@ -4,7 +4,7 @@
 
 - **Apps/Services**: `web` Next.js 16 (Website Marketplace + Khu Quản Trị, dựng trang từ máy chủ, BFF), `api` Fastify 5 (REST, tích hợp VNPay, sổ cái, job hết hạn đơn), PostgreSQL 18, `tunnel` ngrok (tuỳ chọn, chỉ để IPN của VNPay tới được máy local)
 - **Giao tiếp**: REST/JSON; trình duyệt chỉ nói chuyện với `web`, `web` gọi `api` server-side trong mạng compose; VNPay → `api` qua HTTPS của tunnel (IPN) và qua trình duyệt (return URL)
-- **Deploy**: Docker Compose trên máy người chấm: `docker compose up` chạy `db`, `api`, `web` và đi trọn luồng mua vé; `docker compose --profile tunnel up` thêm `tunnel`
+- **Deploy**: Docker Compose trên máy người chấm: `docker compose up` chạy `db`, `api`, `web` và đi trọn luồng mua vé; `docker compose --profile tunnel up` thêm `tunnel`; profile `test` chạy `db-test` + `api-test` tách khỏi DB dev
 
 ## Chi Tiết
 
@@ -102,9 +102,10 @@ Secret VNPay / ngrok chỉ nằm trong `.env` (không commit); `.env.example` đ
 |-----|----------|----|----------|-------------|--------|---------|
 | `web` | Docker Compose local, build `./apps/web` (Next.js standalone) | Không có (bài test chạy local) | — | `docker compose up` | `http://localhost:3000` | `APP_ENV`, `API_INTERNAL_URL=http://api:8080/api`; chờ `api` healthy |
 | `api` | Docker Compose local, build `./apps/api` | Không có | — | `docker compose up`; entrypoint `migrate` → `seed` → server | `http://127.0.0.1:8080` (publish loopback để debug) | `APP_ENV`, `PORT=8080`, `DATABASE_URL`, `LOG_LEVEL`, `VNPAY_*`; chờ `db` healthy; healthcheck `GET /health/ready` |
-| `db` | `postgres:18-alpine` trong Docker Compose | — | — | Volume `pgdata`; init script tạo thêm DB `ticket_test` | Không publish port | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| `db` | `postgres:18-alpine` trong Docker Compose | — | — | Volume `pgdata`; chỉ chứa DB dev `ticket` | Không publish port | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| `db-test` | `postgres:18-alpine`, compose profile `test` | — | — | Dựng cùng `api-test`; dữ liệu trên tmpfs, không volume, mất khi container dừng | Không publish port | DB `ticket_test`; tách khỏi `db` vì rule `destructive-ops` § Database: không dùng DB dev làm DB test, `TRUNCATE` chỉ trên DB test ephemeral |
 | `tunnel` | `ngrok/ngrok:3`, compose profile `tunnel` | — | — | `docker compose --profile tunnel up` | `https://NGROK_DOMAIN` → `http://api:8080` | `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`; tắt thì luồng vẫn chạy qua return URL + `querydr` |
-| `api-test` | Target `test` của Dockerfile `api`, compose profile `test` | — | — | `docker compose --profile test run --rm api-test` | — | `DATABASE_URL` trỏ DB `ticket_test`; chạy Vitest |
+| `api-test` | Target `test` của Dockerfile `api`, compose profile `test` | — | — | `docker compose --profile test run --rm api-test` | — | `DATABASE_URL` trỏ DB `ticket_test` của `db-test` (tên DB ghi literal, không lấy từ `.env`); chờ `db-test` healthy; chạy Vitest, guard tên DB đuôi `_test` trước migrate / `TRUNCATE` |
 
 ### Auth & Authz
 
