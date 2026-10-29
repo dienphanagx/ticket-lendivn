@@ -2,7 +2,7 @@ name: ticket
 
 # Stack chạy local cho bài test. `docker compose up` chỉ chạy db, api, web.
 #   tunnel   → profile `tunnel` (ngrok, nhận IPN của VNPay):  docker compose --profile tunnel up
-#   api-test → profile `test` (Vitest trên DB ticket_test):    docker compose --profile test run --rm api-test
+#   api-test → profile `test` (Vitest trên db-test, DB ticket_test, tmpfs): docker compose --profile test run --rm api-test
 # Base không publish port (port host khai ở docker-compose.override.yml, bind 127.0.0.1).
 # Biến lấy từ .env root (tạo từ .env.example); mỗi service nhận biến qua `environment:` bên dưới.
 
@@ -17,8 +17,6 @@ services:
     volumes:
       # postgres:18 đặt PGDATA theo version bên trong /var/lib/postgresql
       - pgdata:/var/lib/postgresql
-      # Chỉ chạy khi volume trống: tạo thêm DB `ticket_test`
-      - ./scripts/sql/create-test-db.sql:/docker-entrypoint-initdb.d/10-create-test-db.sql:ro
     healthcheck:
       # -h 127.0.0.1 ép TCP: server tạm của bước init chỉ nghe unix socket, nên chưa báo healthy khi init script chưa xong
       test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
@@ -85,7 +83,28 @@ services:
       api:
         condition: service_healthy
 
-  # Vitest trên DB `ticket_test` (tên DB ghi literal ở đây, không lấy từ .env, để test không bao giờ trỏ DB dev `ticket`).
+  # DB test ephemeral (rule `destructive-ops` § Database): dữ liệu trên tmpfs, không volume bền, mất khi container dừng.
+  # Tách hẳn khỏi `db` (dev) để TRUNCATE của test không bao giờ chạm DB dev. Tên DB ghi literal, không lấy từ .env.
+  db-test:
+    profiles: [test]
+    container_name: ticket-db-test
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?thiếu POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD}
+      POSTGRES_DB: ticket_test
+    # postgres:18 đặt PGDATA theo version bên trong /var/lib/postgresql
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      # -h 127.0.0.1 ép TCP: server tạm của bước init chỉ nghe unix socket
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d ticket_test']
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # Vitest trên db-test (DB `ticket_test`, tên ghi literal ở đây để test không bao giờ trỏ DB dev `ticket`).
   # Chạy: docker compose --profile test run --rm api-test
   api-test:
     profiles: [test]
@@ -96,14 +115,14 @@ services:
       APP_ENV: development
       PORT: 8080
       LOG_LEVEL: warn
-      DATABASE_URL: postgres://${POSTGRES_USER:?thiếu POSTGRES_USER}:${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD}@db:5432/ticket_test
+      DATABASE_URL: postgres://${POSTGRES_USER:?thiếu POSTGRES_USER}:${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD}@db-test:5432/ticket_test
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
       VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-}
       VNPAY_QUERY_URL: ${VNPAY_QUERY_URL:-}
       VNPAY_RETURN_URL_BASE: ${VNPAY_RETURN_URL_BASE:-}
     depends_on:
-      db:
+      db-test:
         condition: service_healthy
 
 volumes:
