@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"{src,test}/**/*.{ts,json}\" \"*.{ts,js,json}\""
+    "format": "prettier --write \"{src,test}/**/*.{ts,json}\" \"*.{ts,js,json}\"",
+    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts"
   },
   "packageManager": "pnpm@10.34.6",
   "type": "module",
@@ -20,6 +22,7 @@
     "fastify-type-provider-zod": "^7.0.0",
     "kysely": "~0.29.6",
     "pg": "^8.23.1",
+    "pino": "^10.4.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
