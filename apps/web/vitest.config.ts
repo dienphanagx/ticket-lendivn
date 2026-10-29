@@ -5,6 +5,6 @@ export default defineConfig({
   test: {
     // Test server (Route Handler, proxy) chạy trên Node thật; file test render khai `// @vitest-environment jsdom`
     environment: 'node',
-    include: ['test/**/*.test.ts', 'src/**/*.test.{ts,tsx}'],
+    include: ['test/**/*.test.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
   },
 });
