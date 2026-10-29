@@ -252,3 +252,48 @@ describe('AdminEventList + CompleteEventDialog', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 });
+
+describe('CompleteEventDialog focus return', () => {
+  it('should return focus to the open button after cancel', async () => {
+    const user = userEvent.setup();
+    renderList();
+    const opener = screen.getByRole('button', { name: 'Đánh dấu kết thúc' });
+    await user.click(opener);
+    const dialog = await screen.findByRole('alertdialog');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Huỷ' }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
+  });
+
+  it('should return focus to the open button after Escape', async () => {
+    const user = userEvent.setup();
+    renderList();
+    const opener = screen.getByRole('button', { name: 'Đánh dấu kết thúc' });
+    await user.click(opener);
+    await screen.findByRole('alertdialog');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
+  });
+
+  it('should not throw when the open button is gone after a successful completion', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: buildCompletion() }));
+    const user = userEvent.setup();
+    const view = renderList();
+    // RSC mới về ngay khi refresh: dòng đã thành COMPLETED, nút mở biến mất
+    refresh.mockImplementation(() =>
+      view.rerender(<AdminEventList events={[{ ...onSale, status: 'COMPLETED' }, completed]} />),
+    );
+    const dialog = await openDialog();
+
+    await user.click(confirmButton(dialog));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Đánh dấu kết thúc' })).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBeNull();
+  });
+});

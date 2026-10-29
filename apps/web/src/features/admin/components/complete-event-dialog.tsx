@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   AlertDialog,
@@ -37,10 +37,25 @@ export function CompleteEventDialog({
   // Giữ nội dung sự kiện cuối trong lúc modal chạy hiệu ứng đóng
   const [shown, setShown] = useState(event);
   if (event && event !== shown) setShown(event);
+  // Modal mở bằng state (nút mở nằm ngoài AlertDialogTrigger) nên Radix không tự trả focus về nút đó
+  const opener = useRef<HTMLElement | null>(null);
 
   return (
     <AlertDialog open={event !== null} onOpenChange={(next) => !next && !pending && onCancel()}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        onOpenAutoFocus={() => {
+          opener.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(e) => {
+          const target = opener.current;
+          opener.current = null;
+          // Kết thúc thành công: nút mở đang khoá rồi biến mất sau refresh → để Radix xử lý mặc định
+          if (!target?.isConnected || target.matches(':disabled')) return;
+          e.preventDefault();
+          target.focus();
+        }}
+      >
         {shown && (
           <>
             <AlertDialogHeader>
