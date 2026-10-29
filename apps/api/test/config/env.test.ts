@@ -5,7 +5,7 @@ import { loadEnv } from '../../src/config/env.js';
 const BASE_ENV = {
   APP_ENV: 'development',
   PORT: '8080',
-  DATABASE_URL: 'postgres://ticket:changeme@db:5432/ticket_test',
+  DATABASE_URL: 'postgres://ticket:changeme@db-test:5432/ticket_test',
 };
 
 describe('loadEnv VNPay keys', () => {

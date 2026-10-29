@@ -1,12 +1,16 @@
 import { buildApp } from './app.js';
 import { loadEnv } from './config/env.js';
+import { createDb } from './db/client.js';
 
 const LISTEN_HOST = '0.0.0.0';
 const SHUTDOWN_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const app = await buildApp(env);
+  const db = createDb({ connectionString: env.DATABASE_URL });
+  const app = await buildApp(env, { db });
+  // Đóng pool sau khi server ngừng nhận request
+  app.addHook('onClose', () => db.destroy());
 
   for (const signal of SHUTDOWN_SIGNALS) {
     process.once(signal, () => {

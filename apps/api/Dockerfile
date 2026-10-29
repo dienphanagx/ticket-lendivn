@@ -43,6 +43,6 @@ USER node
 EXPOSE 8080
 # 127.0.0.1, không localhost: alpine phân giải localhost → ::1 trước
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD wget -qO- "http://127.0.0.1:${PORT:-8080}/health" || exit 1
+    CMD wget -qO- "http://127.0.0.1:${PORT:-8080}/health/ready" || exit 1
 # migrate → seed → server (specs/database.md § Conventions); `exec` để node là PID 1 nhận SIGTERM
 CMD ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed.js && exec node dist/server.js"]
