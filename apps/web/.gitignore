@@ -42,3 +42,10 @@ next-env.d.ts
 
 # file mẫu env được commit
 !.env.example
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
