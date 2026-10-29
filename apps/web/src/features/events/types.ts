@@ -2,6 +2,8 @@
 // (`eventListResponse`, `eventDetailResponse`); chỉ parse ở server nên dùng zod classic
 import * as z from 'zod';
 
+import '@/lib/zod-config';
+
 export const EVENT_STATUS = { ON_SALE: 'ON_SALE', COMPLETED: 'COMPLETED' } as const;
 
 const eventBaseSchema = z.object({

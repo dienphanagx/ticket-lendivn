@@ -2,6 +2,8 @@
 // `accountResponse`), enum theo apps/api/src/db/enums.ts. Chỉ parse ở server nên dùng zod classic
 import * as z from 'zod';
 
+import '@/lib/zod-config';
+
 import { isEntityId } from '@/lib/ids';
 import { pageMetaSchema } from '@/lib/pagination';
 

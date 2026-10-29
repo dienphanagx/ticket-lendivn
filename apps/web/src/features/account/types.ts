@@ -2,6 +2,8 @@
 // chỉ parse ở server nên dùng zod classic
 import * as z from 'zod';
 
+import '@/lib/zod-config';
+
 import { ledgerAccountTypeSchema, ledgerTxnTypeSchema } from '@/features/ledger/types';
 import { pageMetaSchema } from '@/lib/pagination';
 

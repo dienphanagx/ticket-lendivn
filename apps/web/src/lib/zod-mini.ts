@@ -2,6 +2,8 @@
 import { en } from 'zod/locales';
 import { config } from 'zod/mini';
 
+import '@/lib/zod-config';
+
 config(en());
 
 export * from 'zod/mini';

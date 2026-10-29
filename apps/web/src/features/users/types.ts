@@ -2,6 +2,8 @@
 // Không có OpenAPI / gen:api (specs/architecture.md § API Conventions) → schema viết tay, parse lúc chạy
 import * as z from 'zod';
 
+import '@/lib/zod-config';
+
 export const userSummarySchema = z.object({
   id: z.string(),
   displayName: z.string(),

@@ -3,6 +3,8 @@ import 'server-only';
 
 import * as z from 'zod';
 
+import '@/lib/zod-config';
+
 import { ERROR_CODES } from '@/constants/error-codes';
 import { AppError, BFF_ERRORS } from '@/lib/errors';
 
