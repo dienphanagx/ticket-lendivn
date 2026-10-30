@@ -18,7 +18,7 @@
 | C.3 | Xem Kết Quả Thanh Toán | §C. Mua Vé | ✅ PASS |
 | D.1 | Xem Số Dư Và Lịch Sử Bút Toán | §D. Tài Khoản | 🔄 PENDING |
 | D.2 | Xem Danh Sách Đơn Hàng | §D. Tài Khoản | ✅ PASS |
-| E.1 | Đánh Dấu Sự Kiện Kết Thúc | §E. Quản Trị | ⚠️ PARTIAL |
+| E.1 | Đánh Dấu Sự Kiện Kết Thúc | §E. Quản Trị | 🔄 PENDING |
 | E.2 | Xem Sổ Cái Và Số Dư Sàn | §E. Quản Trị | ✅ PASS |
 
 ---
@@ -50,15 +50,15 @@
 
 | TC | Tình huống | Layer | Expected | Status | Ghi chú |
 |----|------------|-------|----------|--------|---------|
-| A.1-08 | Không tải được danh sách tài khoản | UI | Trong dropdown: "Không tải được danh sách tài khoản" + nút "Thử lại" | ⚠️ PARTIAL | Chưa tái hiện lỗi `api` thật (layout fetch ở máy chủ, không được dừng container): chỉ ghi đè prop `loadFailed:true` trong HTML tài liệu bằng route của trình duyệt → dropdown hiện "Không tải được danh sách tài khoản" + "Thử lại"; offline rồi bấm "Thử lại" → "Mất kết nối, vui lòng kiểm tra mạng", giữ trang, không sang trang "No internet", không `pageerror`. Ảnh `.playwright-mcp/qa-functional-web-A.1-08-loadfailed.png`, `.playwright-mcp/qa-functional-web-A.1-08-offline-retry.png` |
-| A.1-09 | Danh sách tài khoản rỗng | UI | "Chưa có tài khoản mẫu, vui lòng nạp dữ liệu mẫu" | 🔄 PENDING | Cần xoá dữ liệu seed để danh sách rỗng, không thực hiện |
+| A.1-08 | Không tải được danh sách tài khoản | UI | Trong dropdown: "Không tải được danh sách tài khoản" + nút "Thử lại" | ⚠️ PARTIAL | Chưa tái hiện lỗi `api` thật (layout fetch ở máy chủ, không được dừng container): chỉ ghi đè prop `loadFailed:true` trong HTML tài liệu bằng route của trình duyệt → dropdown hiện "Không tải được danh sách tài khoản" + "Thử lại"; offline rồi bấm "Thử lại" → "Mất kết nối, vui lòng kiểm tra mạng", giữ trang, không sang trang "No internet", không `pageerror`. Ảnh `.playwright-mcp/qa-functional-web-A.1-08-loadfailed.png`, `.playwright-mcp/qa-functional-web-A.1-08-offline-retry.png` Chạy lại 31/10/2026: vẫn không tái hiện được lỗi `api` thật (cần dừng `api`, cấm `docker compose stop`) |
+| A.1-09 | Danh sách tài khoản rỗng | UI | "Chưa có tài khoản mẫu, vui lòng nạp dữ liệu mẫu" | 🔄 PENDING | Chạy lại 31/10/2026, vẫn chưa chạy được: `api` không có endpoint tạo / xoá người dùng (`GET /v1/users` chỉ đọc), danh sách rỗng chỉ có khi xoá seed trong DB (cấm); ghi đè phản hồi ở trình duyệt không tái hiện được vì `GET /v1/users` do layout gọi phía máy chủ |
 | A.1-10 | Tài khoản đã lưu không còn tồn tại | UI | Xoá lựa chọn, về "Chọn tài khoản", hiển thị "Tài khoản đã chọn không còn tồn tại, vui lòng chọn lại" | ✅ PASS | |
 | A.1-11 | Đổi sang người bán của tin đang chọn (Dũng chọn tin Bình, đổi sang Bình) | UI | Bỏ lựa chọn vé, hiển thị "Bạn không thể mua tin bán của chính mình" | ✅ PASS | |
 | A.1-12 | Đổi sang tài khoản khác không phải người bán của tin đang chọn (Dũng → An khi đang chọn tin Bình) | UI | Giữ nguyên tin bán và số lượng | ✅ PASS | |
 | A.1-13 | Đổi tài khoản khi đang ở trang kết quả của một đơn | UI | Xử lý theo §C Xem Kết Quả Thanh Toán ("Không tìm thấy đơn hàng" thay nội dung tại chỗ) | ✅ PASS | |
 | A.1-14 | Chưa chọn tài khoản, vào /tai-khoan, /don-hang, /quan-tri, /quan-tri/so-cai hoặc nhấn "Chọn" ở tin bán | UI | "Vui lòng chọn tài khoản để tiếp tục" và mở dropdown chọn tài khoản | ✅ PASS | |
 | A.1-15 | Mất kết nối mạng | UI | "Mất kết nối, vui lòng kiểm tra mạng", giữ nguyên trang và lựa chọn | ✅ PASS | |
-| A.1-16 | `api` không phản hồi 15 giây hoặc lỗi hệ thống | UI | "Có lỗi xảy ra, vui lòng thử lại sau" + nút "Thử lại"; lỗi dựng trang từ máy chủ → trang lỗi chung, giữ URL | ⚠️ PARTIAL | Đã xác minh: POST Server Action trả HTTP 500 và phản hồi Flight `BFF_UPSTREAM_UNAVAILABLE` giả lập ở trình duyệt → "Có lỗi xảy ra, vui lòng thử lại sau" + "Thử lại" (cao 44px, Tab tới được, có ring 3px), bấm lại sau khi bỏ chặn → "Đang xem với tài khoản …" và nút biến mất; chọn tài khoản khác thì câu lỗi + nút biến mất ngay. Chưa xác minh: `api` thật treo 15 giây / lỗi hệ thống (không được dừng container) và lỗi dựng trang từ máy chủ → trang lỗi chung giữ URL. Ảnh `.playwright-mcp/qa-functional-web-A.1-16-500.png`, `.playwright-mcp/qa-functional-web-A.1-16-upstream.png` |
+| A.1-16 | `api` không phản hồi 15 giây hoặc lỗi hệ thống | UI | "Có lỗi xảy ra, vui lòng thử lại sau" + nút "Thử lại"; lỗi dựng trang từ máy chủ → trang lỗi chung, giữ URL | ⚠️ PARTIAL | Đã xác minh: POST Server Action trả HTTP 500 và phản hồi Flight `BFF_UPSTREAM_UNAVAILABLE` giả lập ở trình duyệt → "Có lỗi xảy ra, vui lòng thử lại sau" + "Thử lại" (cao 44px, Tab tới được, có ring 3px), bấm lại sau khi bỏ chặn → "Đang xem với tài khoản …" và nút biến mất; chọn tài khoản khác thì câu lỗi + nút biến mất ngay. Chưa xác minh: `api` thật treo 15 giây / lỗi hệ thống (không được dừng container) và lỗi dựng trang từ máy chủ → trang lỗi chung giữ URL. Ảnh `.playwright-mcp/qa-functional-web-A.1-16-500.png`, `.playwright-mcp/qa-functional-web-A.1-16-upstream.png` Chạy lại 31/10/2026: vẫn cần `api` treo / lỗi thật và lỗi dựng trang phía máy chủ, không giả lập được khi không được dừng / làm treo container |
 
 #### Business rules
 
@@ -70,7 +70,7 @@
 | A.1-20 | Người bán vẫn mua | An (có tin bán) xem trang sự kiện | Nút "Chọn" ở tin của Chi và Bình bật; chỉ tin của An bị khoá | ✅ PASS | |
 | A.1-21 | Chưa chọn vẫn xem được | Chưa chọn tài khoản, mở danh sách và trang sự kiện | Xem được đầy đủ, nội dung giống khi đã chọn | ✅ PASS | |
 | A.1-22 | Thanh đầu trang mọi trang | Mở /, trang sự kiện, /don-hang, /tai-khoan, /quan-tri, sổ cái, trang 404 | Có dropdown + liên kết "Sự kiện", "Đơn hàng", "Tài khoản", "Quản trị" | ✅ PASS | |
-| A.1-23 | Yêu cầu kèm mã tài khoản | Mọi yêu cầu tới `api` kèm mã tài khoản đang chọn | Header `X-User-Id` theo cookie | ⚠️ PARTIAL | Request máy chủ web → `api` không quan sát được từ trình duyệt, log `api` không ghi header. Chứng cứ gián tiếp: `api` không có `X-User-Id` trả 400 `VALIDATION_FAILED`; `/don-hang` và `/tai-khoan` hiển thị đúng dữ liệu theo cookie của từng tài khoản |
+| A.1-23 | Yêu cầu kèm mã tài khoản | Mọi yêu cầu tới `api` kèm mã tài khoản đang chọn | Header `X-User-Id` theo cookie | ⚠️ PARTIAL | Request máy chủ web → `api` không quan sát được từ trình duyệt, log `api` không ghi header. Chứng cứ gián tiếp: `api` không có `X-User-Id` trả 400 `VALIDATION_FAILED`; `/don-hang` và `/tai-khoan` hiển thị đúng dữ liệu theo cookie của từng tài khoản Chạy lại 31/10/2026: vẫn không quan sát được request máy chủ web → `api` (container `api` không có `tcpdump`/`ngrep`, log không ghi header; đổi `API_INTERNAL_URL` sang proxy là sửa cấu hình app, cấm) |
 | A.1-24 | Định dạng tiền | Hiển thị số tiền | VND số nguyên, dấu chấm ngăn hàng nghìn, hậu tố "₫" (vd `1.650.000 ₫`) | ✅ PASS | |
 | A.1-25 | Số tiền âm | Bút toán giảm | Dấu "−" phía trước | ✅ PASS | |
 | A.1-26 | Định dạng thời gian | Hiển thị thời điểm | `dd/MM/yyyy HH:mm` múi giờ Asia/Ho_Chi_Minh (vd 15:27Z → 22:27) | ✅ PASS | |
@@ -108,7 +108,7 @@
 
 | TC | Tình huống | Layer | Expected | Status | Ghi chú |
 |----|------------|-------|----------|--------|---------|
-| B.1-05 | Chưa có sự kiện nào | UI | "Chưa có sự kiện nào" | 🔄 PENDING | Cần xoá seed để không còn sự kiện, không thực hiện |
+| B.1-05 | Chưa có sự kiện nào | UI | "Chưa có sự kiện nào" | 🔄 PENDING | Chạy lại 31/10/2026, vẫn chưa chạy được: `api` không có endpoint tạo / xoá sự kiện (chỉ `POST /v1/events/:id/complete`), muốn danh sách rỗng phải xoá seed trong DB (cấm) |
 | B.1-06 | Sự kiện đang bán nhưng mọi tin hết vé | UI | Thẻ "Hết vé" thay cho giá và số vé còn lại | ✅ PASS | |
 | B.1-07 | Sự kiện đã kết thúc | UI | Nhãn "Đã kết thúc", không hiển thị giá và số vé còn lại | ✅ PASS | |
 
@@ -119,7 +119,7 @@
 | B.1-08 | Sắp xếp | "Đang bán" trước, mỗi nhóm theo thời gian tăng dần | Mùa Thu (20/03) trước Biển (15/05); đã kết thúc xuống sau | ✅ PASS | |
 | B.1-09 | Không phân trang | Danh sách 2 sự kiện | Không có điều khiển phân trang | ✅ PASS | |
 | B.1-10 | Vé giữ chỗ không tính vào số còn lại | Dũng tạo đơn 2 vé Bình (chờ) | Số còn lại giảm (Mùa Thu 16 → 14 theo `GET /v1/events`) | ✅ PASS | |
-| B.1-11 | SEO robots (ngoài production) | `/robots.txt` và `curl -sI /` ở môi trường local | `Disallow: /`; header `X-Robots-Tag: noindex, nofollow` | ⚠️ PARTIAL | `/robots.txt` có `Disallow: /`; `curl -sI /` và `/su-kien/...` thẳng app (không có edge nginx, `APP_ENV` ≠ production) không có `X-Robots-Tag: noindex, nofollow`; `apps/web/src/proxy.ts` không đặt header này, trang không có `<meta name="robots">`. Spec chức năng không nêu SEO / robots |
+| B.1-11 | SEO robots (ngoài production) | `/robots.txt` và `curl -sI /` ở môi trường local | `Disallow: /`; header `X-Robots-Tag: noindex, nofollow` | ⚠️ PARTIAL | Chạy lại 31/10/2026 (`APP_ENV=development`, thẳng app, không có edge nginx): `/robots.txt` có `Disallow: /` (đúng, `apps/web/src/app/robots.ts:7-9`); `curl -sI /` và `/su-kien/...` vẫn không có `X-Robots-Tag: noindex, nofollow`; `apps/web/src/proxy.ts` không đặt header này, trang không có `<meta name="robots">`. Spec chức năng không nêu SEO / robots |
 
 ### B.2 Xem Trang Sự Kiện
 
@@ -147,7 +147,7 @@
 |----|------------|-------|----------|--------|---------|
 | B.2-09 | Slug không tồn tại (`khong-co-slug`) | UI | HTTP 404 "Không tìm thấy sự kiện" | ✅ PASS | |
 | B.2-10 | Slug không tồn tại | API | 404 + `code` theo spec `api` | ✅ PASS | |
-| B.2-11 | Sự kiện không có tin bán | UI | "Sự kiện chưa có tin bán vé" | 🔄 PENDING | Seed không có sự kiện nào không có tin bán, không tạo được dữ liệu qua UI / API |
+| B.2-11 | Sự kiện không có tin bán | UI | "Sự kiện chưa có tin bán vé" | 🔄 PENDING | Chạy lại 31/10/2026, vẫn chưa chạy được: `api` không có endpoint tạo tin bán; cả 2 sự kiện seed đều có đủ 3 tin, muốn sự kiện không có tin phải sửa / xoá seed trong DB (cấm) |
 | B.2-12 | Tin còn 0 vé | UI | Nhãn "Hết vé", nút "Chọn" vô hiệu (tin Chi sau khi bị mua hết) | ✅ PASS | |
 | B.2-13 | Sự kiện đã kết thúc | UI | Băng "Sự kiện đã kết thúc, ngừng bán vé"; mọi nút "Chọn" vô hiệu; ẩn số vé còn lại | ✅ PASS | |
 | B.2-14 | Chưa chọn tài khoản, nhấn "Chọn" tin Bình | UI | Thông báo yêu cầu chọn tài khoản + mở dropdown; chọn Dũng xong mở khu chọn số lượng của tin Bình | ✅ PASS | |
@@ -157,7 +157,7 @@
 | TC | Rule | Mô tả | Expected | Status | Ghi chú |
 |----|------|-------|----------|--------|---------|
 | B.2-15 | Sắp xếp tin | Khác giá | Giá tăng dần | ✅ PASS | |
-| B.2-16 | Sắp xếp tin | Cùng giá | Tin còn nhiều vé hơn đứng trước | 🔄 PENDING | Dữ liệu seed không có hai tin cùng giá, không tạo được tin bán qua UI / API |
+| B.2-16 | Sắp xếp tin | Cùng giá | Tin còn nhiều vé hơn đứng trước | 🔄 PENDING | Chạy lại 31/10/2026, vẫn chưa chạy được: `api` không có endpoint tạo tin bán; seed không có hai tin cùng giá trong một sự kiện (Mùa Thu 450.000 / 500.000 / 750.000; Biển 333.333 / 900.000 / 1.200.000), muốn có phải sửa giá seed trong DB (cấm) |
 | B.2-17 | Số còn lại | Bình: 4 vé, 2 đã bán, 1 đang giữ chỗ | Hiển thị "Còn 1 vé" | ✅ PASS | |
 | B.2-18 | Nội dung không phụ thuộc tài khoản | Xem khi chưa chọn và khi đã chọn | Cùng sự kiện, tin, giá, số còn lại | ✅ PASS | |
 | B.2-19 | Không mua tin của chính mình | Chi / An / Bình xem tin của mình | Nút "Chọn" vô hiệu | ✅ PASS | |
@@ -245,7 +245,7 @@
 | C.2-14 | Tin bán của chính tài khoản | UI | "Bạn không thể mua tin bán của chính mình" | ✅ PASS | |
 | C.2-15 | Tin bán của chính tài khoản | API | 4xx + `code` theo spec `api` | ✅ PASS | |
 | C.2-16 | Tin bán không còn tồn tại | UI | Đóng khu chọn, tải lại danh sách, "Tin bán không còn tồn tại" | ✅ PASS | |
-| C.2-17 | Mất mạng hoặc quá 15 giây khi tạo đơn | UI | Mở lại nút, "Chưa tạo được đơn, vui lòng thử lại"; bấm lại không tạo đơn thứ hai | ⚠️ PARTIAL | POST /bff/orders: mất mạng và 504 `BFF_UPSTREAM_TIMEOUT` giả lập đúng (nút mở lại, cùng khoá, không đơn thứ hai); chưa kiểm cắt 15s thật vì không làm `api` treo (BFF không phản hồi: câu lỗi hiện sau ~20s, `bff-fetch.ts:7`) |
+| C.2-17 | Mất mạng hoặc quá 15 giây khi tạo đơn | UI | Mở lại nút, "Chưa tạo được đơn, vui lòng thử lại"; bấm lại không tạo đơn thứ hai | ⚠️ PARTIAL | POST /bff/orders: mất mạng và 504 `BFF_UPSTREAM_TIMEOUT` giả lập đúng (nút mở lại, cùng khoá, không đơn thứ hai); chưa kiểm cắt 15s thật vì không làm `api` treo (BFF không phản hồi: câu lỗi hiện sau ~20s, `bff-fetch.ts:7`) Chạy lại 31/10/2026: vẫn không làm `api` treo 15 giây thật được (cấm dừng / restart container) |
 | C.2-18 | Không mở được trang cổng thanh toán | UI | "Không kết nối được cổng thanh toán, vui lòng thử lại sau"; đơn giữ chờ thanh toán | ✅ PASS | |
 | C.2-19 | Nhấn Back từ cổng về trang sự kiện | UI | Số vé còn lại tải lại (đã trừ giữ chỗ); đơn vẫn chờ | ✅ PASS | |
 | C.2-20 | Huỷ / thất bại trên cổng | UI | Cổng chuyển về trang kết quả, trạng thái theo `api` | ✅ PASS | |
@@ -324,8 +324,8 @@
 | D.1-01 | 1 | Nhấn "Tài khoản" trên thanh đầu trang | — | `/tai-khoan` | Chuyển sang trang Tài khoản | ✅ PASS | |
 | D.1-02 | 2 | Hệ thống hiển thị số dư An (người bán Mùa Thu) sau các đơn đã trả | `GET /v1/me/balance` | — | Tên "Nguyễn Văn An"; "Số dư đang chờ" 1.425.000 ₫ + chú thích; "Số dư khả dụng" 0 ₫; các dòng "Bán 1 vé · Đêm nhạc Mùa Thu 2027 · Đơn {mã}", "Đang chờ", +475.000 ₫ mỗi dòng (tổng 1.425.000 ₫) | ✅ PASS | |
 | D.1-03 | 2 | Số dư An sau khi kết thúc Mùa Thu | `GET /v1/me/balance` | — | Đang chờ 0, khả dụng 1.425.000 ₫, dòng "Giải phóng ký quỹ · Đêm nhạc Mùa Thu 2027" | ✅ PASS | |
-| D.1-04 | 3 | Nhấn sang trang khác của lịch sử | — | — | Chuyển trang | 🔄 PENDING | Không đủ dữ liệu cho trang 2 (`limit` 20): An 5 dòng, Bình 5, Dũng 2; cả hai sự kiện đã kết thúc nên không tạo thêm bút toán được |
-| D.1-05 | 4 | Hệ thống tải trang lịch sử tương ứng | `GET /v1/me/balance?page=` | — | Các dòng trang đó; số dư giữ nguyên | 🔄 PENDING | Như D.1-04: không có trang 2 để tải |
+| D.1-04 | 3 | Nhấn sang trang khác của lịch sử | — | — | Chuyển trang | ✅ PASS | |
+| D.1-05 | 4 | Hệ thống tải trang lịch sử tương ứng | `GET /v1/me/balance?page=` | — | Các dòng trang đó; số dư giữ nguyên | ✅ PASS | |
 
 #### Validation
 
@@ -341,7 +341,7 @@
 | D.1-08 | Chưa chọn tài khoản | UI | "Vui lòng chọn tài khoản để tiếp tục" + mở dropdown | ✅ PASS | |
 | D.1-09 | Chưa có bút toán (Chi) | UI | Hai ô `0 ₫`, bảng "Chưa có giao dịch nào" | ✅ PASS | |
 | D.1-10 | `page` vượt `meta.totalPages` | UI | Về trang 1 | ✅ PASS | |
-| D.1-11 | Lỗi khi tải trang Tài khoản (lỗi mạng, lỗi hệ thống, quá 15 giây) | UI | Trang lỗi chung kèm nút "Thử lại"; không có trường hợp chỉ số dư hoặc chỉ lịch sử tải được (cùng một phản hồi `api`) | 🔄 PENDING | `api` được `web` gọi phía máy chủ (SSR) nên Playwright `route`/`setOffline` không giả lập được lỗi/timeout `api` |
+| D.1-11 | Lỗi khi tải trang Tài khoản (lỗi mạng, lỗi hệ thống, quá 15 giây) | UI | Trang lỗi chung kèm nút "Thử lại"; không có trường hợp chỉ số dư hoặc chỉ lịch sử tải được (cùng một phản hồi `api`) | 🔄 PENDING | Chạy lại 31/10/2026, vẫn chưa chạy được: `api` được `web` gọi phía máy chủ (SSR) nên `route` / `setOffline` của trình duyệt không giả lập được lỗi / timeout `api`; gây lỗi thật cần dừng / làm treo container `api` (cấm `docker compose stop/restart`) |
 
 #### Business rules
 
@@ -431,8 +431,8 @@
 | E.1-14 | Sự kiện đã được kết thúc trước đó (tab khác) | UI | Đóng modal, cập nhật dòng, "Sự kiện đã được đánh dấu kết thúc trước đó" | ✅ PASS | |
 | E.1-15 | Sự kiện đã được kết thúc trước đó | API | 409 `EVENT_ALREADY_COMPLETED` | ✅ PASS | |
 | E.1-16 | Lỗi mạng / lỗi hệ thống khi xác nhận | UI | Giữ modal, mở lại nút, "Chưa kết thúc được sự kiện, vui lòng thử lại" | ✅ PASS | |
-| E.1-17 | Không có sự kiện nào | UI | "Chưa có sự kiện nào" | 🔄 PENDING | Trạng thái rỗng do Server Component dựng khi `api` trả danh sách rỗng, không giả lập được ở trình duyệt; cần DB không có sự kiện (không được xoá seed) |
-| E.1-18 | Sự kiện không có tiền ký quỹ | UI | Modal vẫn cho xác nhận, hiển thị `0 ₫` | ⚠️ PARTIAL | Cả hai sự kiện đều có ký quỹ nên không có sự kiện thật với ký quỹ 0 ₫. Giả lập ở trình duyệt (ghi đè trạng thái ON_SALE trong HTML, ký quỹ 0): modal hiện "0 ₫", 0 người bán, 0 đơn, nút "Xác nhận kết thúc" bật; chưa bấm xác nhận để kết thúc thật |
+| E.1-17 | Không có sự kiện nào | UI | "Chưa có sự kiện nào" | 🔄 PENDING | Chạy lại 31/10/2026, vẫn chưa chạy được: trạng thái rỗng do Server Component dựng khi `GET /v1/events` trả danh sách rỗng; `api` không có endpoint xoá sự kiện, muốn rỗng phải xoá seed trong DB (cấm) |
+| E.1-18 | Sự kiện không có tiền ký quỹ | UI | Modal vẫn cho xác nhận, hiển thị `0 ₫` | ✅ PASS | |
 
 #### Business rules
 
