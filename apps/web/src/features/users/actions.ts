@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { ERROR_CODES } from '@/constants/error-codes';
 import { apiFetchAnonymous } from '@/lib/api/api-fetch';
 import { CURRENT_USER_COOKIE, currentUserCookieOptions } from '@/lib/current-user';
-import { AppError } from '@/lib/errors';
+import { AppError, BFF_ERRORS } from '@/lib/errors';
 import { isEntityId } from '@/lib/ids';
 
 import { listUsers } from './api';
@@ -29,7 +29,13 @@ export async function selectUser(userId: unknown): Promise<SelectUserState> {
     (await cookies()).set(CURRENT_USER_COOKIE, user.id, currentUserCookieOptions());
     return { success: true, data: { displayName: user.displayName } };
   } catch (err) {
-    if (!(err instanceof AppError)) throw err; // lỗi không lường trước → error.tsx
+    // Lỗi không lường trước: throw → lời gọi reject, AccountSwitcher bắt ở client (header ngoài app/error.tsx)
+    if (!(err instanceof AppError)) throw err;
+    // api không tới được từ server = lỗi hệ thống, không phải mất mạng của người dùng
+    if (err.code === 'NETWORK_ERROR') {
+      const { code, message } = BFF_ERRORS.UPSTREAM_UNAVAILABLE;
+      return fail(code, message);
+    }
     return fail(err.code, err.message);
   }
 }

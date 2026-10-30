@@ -18,8 +18,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ERROR_CODES } from '@/constants/error-codes';
 import { ACCOUNT_MESSAGES, UI_MESSAGES } from '@/constants/messages';
-import { getErrorMessage } from '@/lib/error-message';
+import { ERROR_MESSAGES, getErrorMessage } from '@/lib/error-message';
 
+import { actionFailure } from '../action-failure';
 import { clearCurrentUser, selectUser } from '../actions';
 import type { UserSummary } from '../types';
 
@@ -33,7 +34,8 @@ interface AccountSwitcherProps {
   stale: boolean;
 }
 
-type Notice = { text: string; autoHide: boolean };
+// retryUserId: lỗi hệ thống → nút "Thử lại" chọn lại đúng tài khoản đó (spec web § Quy Tắc Chung)
+type Notice = { text: string; autoHide: boolean; retryUserId?: string };
 
 export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: AccountSwitcherProps) {
   const { open, setOpen, checkoutPending } = useAccountMenu();
@@ -46,7 +48,8 @@ export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: Acc
   const current = users.find((u) => u.id === currentUserId);
 
   useEffect(() => {
-    if (stale) void clearCurrentUser();
+    // Mất mạng: cookie cũ còn đó, lần tải trang sau thử xoá lại
+    if (stale) clearCurrentUser().catch(() => undefined);
   }, [stale]);
 
   const dismiss = useCallback(() => setNotice(null), []);
@@ -55,19 +58,40 @@ export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: Acc
     setOpen(false);
     // Đang thanh toán: đổi cookie lúc này làm bước lấy URL cổng chạy dưới tài khoản khác
     if (userId === currentUserId || checkoutPending) return;
+    setNotice(null); // câu lỗi cũ (kèm nút "Thử lại") không còn đúng khi đang đổi tài khoản
     startTransition(async () => {
-      const result = await selectUser(userId);
+      const result = await selectUser(userId).catch(actionFailure);
       if (result.success) {
         setShowStale(false);
         setNotice({ text: ACCOUNT_MESSAGES.SWITCHED(result.data.displayName), autoHide: true });
         return;
       }
-      setNotice({ text: getErrorMessage(result), autoHide: false });
+      const text = getErrorMessage(result);
+      // Mất mạng / mã nghiệp vụ không kèm nút; chỉ lỗi hệ thống (câu chung) mới có "Thử lại"
+      setNotice({
+        text,
+        autoHide: false,
+        retryUserId: text === ERROR_MESSAGES.generic ? userId : undefined,
+      });
       if (result.code === ERROR_CODES.USER_NOT_FOUND) router.refresh(); // tải lại danh sách
     });
   };
 
-  const retry = () => startTransition(() => router.refresh());
+  const retry = () => {
+    // Offline: router.refresh() rơi về tải lại toàn trang → trang "No internet" của trình duyệt.
+    // Chỉ chặn được khi trình duyệt biết đã offline; mạng chập chờn vẫn đi tiếp refresh
+    if (!navigator.onLine) {
+      setNotice({ text: ERROR_MESSAGES.NETWORK_ERROR, autoHide: false });
+      return;
+    }
+    startTransition(() => router.refresh());
+  };
+
+  // Đang thanh toán: không đổi được tài khoản → ẩn nút (choose cũng thoát sớm)
+  const retryUserId = checkoutPending ? undefined : notice?.retryUserId;
+  const retryChoose = () => {
+    if (retryUserId) choose(retryUserId);
+  };
 
   const message = notice?.text ?? (showStale ? ACCOUNT_MESSAGES.STALE : null);
 
@@ -111,6 +135,7 @@ export function AccountSwitcher({ users, currentUserId, loadFailed, stale }: Acc
       <FlashNotice
         message={message}
         autoHideMs={notice?.autoHide ? SWITCH_NOTICE_MS : undefined}
+        action={retryUserId ? { label: UI_MESSAGES.RETRY, onClick: retryChoose } : undefined}
         onDismiss={dismiss}
       />
     </>

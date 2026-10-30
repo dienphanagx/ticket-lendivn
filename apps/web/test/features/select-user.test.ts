@@ -105,6 +105,20 @@ describe('selectUser', () => {
     expect(result).toMatchObject({ success: false, code: 'INTERNAL_ERROR' });
     expect(cookieStore.set).not.toHaveBeenCalled();
   });
+
+  // Mạng của người dùng vẫn ổn: không để client hiện câu "Mất kết nối"
+  it('should return BFF_UPSTREAM_UNAVAILABLE when the server cannot reach api', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+
+    const result = await selectUser(USER_A);
+
+    expect(result).toEqual({
+      success: false,
+      code: 'BFF_UPSTREAM_UNAVAILABLE',
+      message: 'Upstream API is unavailable',
+    });
+    expect(cookieStore.set).not.toHaveBeenCalled();
+  });
 });
 
 describe('clearCurrentUser', () => {
