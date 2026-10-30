@@ -72,10 +72,16 @@ test.describe('Luồng mua vé có ký quỹ', () => {
     let orderId = '';
     const txn = String(Date.now()); // số giao dịch VNPay duy nhất theo thời gian
     let gatewayUrl: URL | undefined;
-    // Chặn điều hướng ra cổng VNPay (không gọi mạng ngoài), chỉ ghi lại URL
+    // Chặn điều hướng ra cổng VNPay (không gọi mạng ngoài), chỉ ghi lại URL.
+    // Trả trang 200 giả thay vì `abort()`: abort để lại trang lỗi `chrome-error://` và làm
+    // `page.goto` kế tiếp bị báo "interrupted by another navigation"
     await page.route(GATEWAY_URL, (route) => {
       gatewayUrl = new URL(route.request().url());
-      return route.abort();
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><title>VNPay sandbox (giả lập)</title>',
+      });
     });
 
     await test.step('1. Mở trang sự kiện và chọn tài khoản Dũng', async () => {
