@@ -13,7 +13,7 @@
 | A.1 | Chọn Tài Khoản Hiện Tại | §A. Chọn Người Dùng | ⚠️ PARTIAL |
 | B.1 | Xem Danh Sách Sự Kiện | §B. Sự Kiện | ⚠️ PARTIAL |
 | B.2 | Xem Trang Sự Kiện | §B. Sự Kiện | ⚠️ PARTIAL |
-| C.1 | Chọn Vé Và Xem Tổng Tiền | §C. Mua Vé | 🔄 PENDING |
+| C.1 | Chọn Vé Và Xem Tổng Tiền | §C. Mua Vé | ⚠️ PARTIAL |
 | C.2 | Xác Nhận Thanh Toán | §C. Mua Vé | ⚠️ PARTIAL |
 | C.3 | Xem Kết Quả Thanh Toán | §C. Mua Vé | ⚠️ PARTIAL |
 | D.1 | Xem Số Dư Và Lịch Sử Bút Toán | §D. Tài Khoản | ⚠️ PARTIAL |
@@ -202,7 +202,7 @@
 | C.1-15 | Số lượng bằng số vé còn lại | UI | Nút "Tăng" vô hiệu | 🔄 PENDING | |
 | C.1-16 | Nhấn "Chọn" ở tin khác | UI | Khu chọn chuyển sang tin mới, số lượng đặt lại 1 | 🔄 PENDING | |
 | C.1-17 | Nhấn Esc khi khu chọn đang mở (bottom sheet 360px) | UI | Đóng khu chọn, không tạo đơn | ✅ PASS | |
-| C.1-18 | Đóng bằng nút đóng / vuốt xuống bottom sheet | UI | Đóng khu chọn, không tạo đơn | 🔄 PENDING | Có nút "Đóng" trong a11y tree nhưng chưa bấm; chưa thử vuốt |
+| C.1-18 | Đóng bằng nút "Đóng" hoặc chạm vùng nền bên ngoài (bottom sheet 360px) | UI | Đóng khu chọn, không tạo đơn, focus trả về nút "Chọn" đã mở khu chọn | ⚠️ PARTIAL | Nguồn ui-reviewer p1: nút "Đóng" và Esc đã xác nhận ở 360×740; chưa tự chạy lại trong lượt QA; chưa kiểm chạm vùng nền và trả focus về nút "Chọn". Spec đã bỏ vuốt xuống |
 
 #### Business rules
 
@@ -341,7 +341,7 @@
 | D.1-08 | Chưa chọn tài khoản | UI | "Vui lòng chọn tài khoản để tiếp tục" + mở dropdown | ✅ PASS | |
 | D.1-09 | Chưa có bút toán (Dũng) | UI | Hai ô `0 ₫`, bảng "Chưa có giao dịch nào" | ✅ PASS | |
 | D.1-10 | `page` vượt `meta.totalPages` | UI | Về trang 1 | 🔄 PENDING | |
-| D.1-11 | Tải lịch sử lỗi, số dư tải được | UI | Hiển thị số dư, bảng "Không tải được lịch sử giao dịch" + "Thử lại" | 🔄 PENDING | |
+| D.1-11 | Lỗi khi tải trang Tài khoản (lỗi mạng, lỗi hệ thống, quá 15 giây) | UI | Trang lỗi chung kèm nút "Thử lại"; không có trường hợp chỉ số dư hoặc chỉ lịch sử tải được (cùng một phản hồi `api`) | 🔄 PENDING | Không giả lập được lỗi `api` trong môi trường QA |
 
 #### Business rules
 
@@ -424,7 +424,7 @@
 | E.1-10 | Chưa chọn tài khoản | UI | "Vui lòng chọn tài khoản để tiếp tục" + mở dropdown | ✅ PASS | |
 | E.1-11 | Nhấn "Huỷ" trên modal | UI | Đóng modal, không đổi gì | ✅ PASS | |
 | E.1-12 | Nhấn Esc trên modal | UI | Đóng modal, không đổi gì | ✅ PASS | |
-| E.1-13 | Nút đóng trên modal | UI | Có nút đóng, bấm thì đóng modal | ⚠️ PARTIAL | Modal chỉ có "Huỷ" và "Xác nhận kết thúc", không có nút đóng (X) riêng như spec liệt kê |
+| E.1-13 | Các nút trên modal; "Huỷ" / Esc trả focus | UI | Modal chỉ có "Huỷ" và "Xác nhận kết thúc" (không có nút đóng X); "Huỷ" / Esc đóng modal và trả focus về nút "Đánh dấu kết thúc" đã mở modal | ⚠️ PARTIAL | Đã quan sát: modal chỉ có "Huỷ" và "Xác nhận kết thúc", "Huỷ" / Esc đóng được. Trả focus: ui-reviewer p2 và test Vitest xác nhận; chưa chạy lại trong lượt QA |
 | E.1-14 | Sự kiện đã được kết thúc trước đó (tab khác) | UI | Đóng modal, cập nhật dòng, "Sự kiện đã được đánh dấu kết thúc trước đó" | 🔄 PENDING | Không thử hai tab (giới hạn một sự kiện được kết thúc) |
 | E.1-15 | Sự kiện đã được kết thúc trước đó | API | 409 `EVENT_ALREADY_COMPLETED` | ✅ PASS | |
 | E.1-16 | Lỗi mạng / lỗi hệ thống khi xác nhận | UI | Giữ modal, mở lại nút, "Chưa kết thúc được sự kiện, vui lòng thử lại" | 🔄 PENDING | |
