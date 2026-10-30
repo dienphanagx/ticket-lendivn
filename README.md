@@ -6,7 +6,7 @@ Lát cắt mỏng của sàn bán lại vé sự kiện: chọn vé, thanh toán
 
 - **Làm gì**: trang sự kiện dựng từ máy chủ, giữ chỗ 15 phút, chuyển sang VNPay, trang kết quả hiện trạng thái thật của đơn, xử lý IPN có chữ ký, sổ cái kép, số dư đang chờ / khả dụng, kết thúc sự kiện.
 - **Stack**: Next.js 16 (`apps/web`, SSR + BFF) + Fastify 5 (`apps/api`) + PostgreSQL 18; hai app standalone, chạy bằng Docker Compose.
-- **Kiểm thử hiện có**: api 379 test (Vitest, Postgres thật), web 301 test Vitest (25 file) + 2 E2E Playwright, 218 test case QA chức năng trong [`specs/test-cases/web.md`](specs/test-cases/web.md) (204 PASS, 0 FAIL, 6 PARTIAL, 8 PENDING; không có FAIL do app). 2 E2E Playwright chạy xanh nguyên file trên DB seed sạch (2 passed, 10,5 giây, một lần duy nhất, không retry). Số web Vitest (301) là kết quả `pnpm test` mới nhất; số test api (379) lấy từ lần chạy trước, tôi không chạy lại khi viết README này.
+- **Kiểm thử hiện có**: api 379 test (Vitest, Postgres thật), web 301 test Vitest (25 file) + 2 E2E Playwright, 218 test case QA chức năng trong [`specs/test-cases/web.md`](specs/test-cases/web.md) (207 PASS, 0 FAIL, 5 PARTIAL, 6 PENDING; không có FAIL do app). 2 E2E Playwright chạy xanh nguyên file trên DB seed sạch (2 passed, 10,5 giây, một lần duy nhất, không retry). Số web Vitest (301) là kết quả `pnpm test` mới nhất; số test api (379) lấy từ lần chạy trước, tôi không chạy lại khi viết README này.
 - **Đã thanh toán thật vài lần qua VNPay sandbox** bằng thẻ NCB test: đơn lên `PAID` qua return URL, sổ cái ghi đúng bút toán. **Chưa kiểm chứng**: IPN thật từ VNPay (chưa có tunnel trong lần chạy thật; IPN chỉ thử bằng script `send-ipn` tự ký) và `querydr` có chữ ký (sandbox luôn trả lỗi 99 không ký). Xem mục 2 và 4.
 - **Trạng thái**: đủ các hạng mục của brief; chưa sẵn sàng production (mục 4).
 
@@ -163,7 +163,7 @@ Danh sách theo thứ tự ưu tiên (a-b quan trọng nhất).
 | h | Chưa hoàn tiền thật | `REFUND_REQUIRED` và huỷ sự kiện mới chỉ ghi khoản phải trả (`BUYER_REFUND_PAYABLE`), không gọi API hoàn tiền của cổng |
 | i | Hai chỗ dễ vỡ ở `web` | `POST /bff/orders` đọc body không giới hạn kích thước. Quên `import '@/lib/zod-config'` ở module schema mới sẽ làm lại lỗi CSP chặn `eval` của Zod |
 | j | Rác trên máy dev | Image Docker nháp từ kiểm thử đột biến còn trên máy tôi (`docker image ls \| grep mut`), không nằm trong repo |
-| k | 14 test case QA chưa PASS (6 PARTIAL, 8 PENDING) | Xem `specs/test-cases/web.md`: cần xoá / nạp lại seed (không được phép), lỗi `api` phía máy chủ không giả lập được ở trình duyệt, `api` treo 15 giây không giả lập được, trang 2 của sổ cái không đủ dữ liệu |
+| k | 11 test case QA chưa PASS (5 PARTIAL, 6 PENDING) | Xem `specs/test-cases/web.md`: cần xoá / nạp lại seed (không được phép), lỗi `api` phía máy chủ không giả lập được ở trình duyệt, `api` treo 15 giây không giả lập được, thiếu header `X-Robots-Tag` (B.1-11) do `APP_ENV=development`, spec chức năng không nêu SEO |
 
 **Bước tiếp theo** (theo thứ tự): kiểm IPN thật (bật tunnel) và `querydr` có chữ ký với VNPay (mục d); đăng nhập thật + phân quyền Khu Quản Trị và chỉ mở route IPN ra ngoài; job đối soát `querydr`; rate limit + giới hạn giữ chỗ; role DB least-privilege và timeout; hoàn tiền thật; CI/CD; giám sát.
 
@@ -173,7 +173,7 @@ Danh sách theo thứ tự ưu tiên (a-b quan trọng nhất).
 
 **Quy trình.** Tôi dùng Claude Code làm điều phối viên (orchestrator) và giao việc cho các agent chuyên biệt, mỗi agent một vai: `requirement-analyst`, `business-analyst`, `architect`, `implementer`, `code-reviewer`, `security-reviewer`, `ui-reviewer`, `qa-functional`, `test-engineer`, `devops`, `git-manager`. Luồng: requirements, functional spec, kiến trúc / tech stack / database (đều là file trong `specs/`), rồi implement từng lát (api trước, web sau), review, vòng sửa (fix-loop) cho tới khi hết lỗi mức NGHIÊM TRỌNG và CẢNH BÁO. Sau đó viết test, làm mutation check thủ công (phá có chủ đích một đoạn code tiền để xem test có bắt được không; các image `*-mut*` ở mục 4j là dấu vết), và QA chức năng trên trình duyệt thật. Quy tắc điều phối nằm ở `CLAUDE.md`, `ORCHESTRATION.md`.
 
-**Thống kê có thật**: lịch sử commit xem bằng `git log --oneline`; 379 test api, 301 test Vitest web, 2 E2E, 218 test case QA (204 PASS / 0 FAIL / 6 PARTIAL / 8 PENDING) (nguồn số liệu: xem mục Tóm tắt).
+**Thống kê có thật**: lịch sử commit xem bằng `git log --oneline`; 379 test api, 301 test Vitest web, 2 E2E, 218 test case QA (207 PASS / 0 FAIL / 5 PARTIAL / 6 PENDING) (nguồn số liệu: xem mục Tóm tắt).
 
 **Lỗi thật mà review / test bắt được** (còn dấu vết trong specs hoặc git log):
 
