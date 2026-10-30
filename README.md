@@ -6,7 +6,7 @@ Lát cắt mỏng của sàn bán lại vé sự kiện: chọn vé, thanh toán
 
 - **Làm gì**: trang sự kiện dựng từ máy chủ, giữ chỗ 15 phút, chuyển sang VNPay, trang kết quả hiện trạng thái thật của đơn, xử lý IPN có chữ ký, sổ cái kép, số dư đang chờ / khả dụng, kết thúc sự kiện.
 - **Stack**: Next.js 16 (`apps/web`, SSR + BFF) + Fastify 5 (`apps/api`) + PostgreSQL 18; hai app standalone, chạy bằng Docker Compose.
-- **Kiểm thử hiện có**: api 379 test (Vitest, Postgres thật), web 288 test Vitest + 2 E2E Playwright, 215 test case QA chức năng trong [`specs/test-cases/web.md`](specs/test-cases/web.md) (111 PASS, 18 PARTIAL, 86 PENDING). Số test api / web lấy từ lần chạy gần nhất trong quá trình làm, tôi không chạy lại khi viết README này.
+- **Kiểm thử hiện có**: api 379 test (Vitest, Postgres thật), web 288 test Vitest + 2 E2E Playwright, 215 test case QA chức năng trong [`specs/test-cases/web.md`](specs/test-cases/web.md) (111 PASS, 0 FAIL, 19 PARTIAL, 85 PENDING). 2 E2E Playwright chạy xanh nguyên file trên DB seed sạch (2 passed, 10,5 giây, một lần duy nhất, không retry). Số test api (379) / web Vitest (288) lấy từ lần chạy gần nhất trong quá trình làm, tôi không chạy lại khi viết README này.
 - **Chưa thử với VNPay sandbox thật** (xem mục 4): mọi kiểm thử dùng khoá giả + script gửi IPN tự ký.
 - **Trạng thái**: đủ các hạng mục của brief; chưa sẵn sàng production (mục 4).
 
@@ -92,7 +92,7 @@ docker compose exec -T api node dist/scripts/send-ipn.js <mã đơn> <số tiề
 | `cd apps/web && pnpm test` | Vitest của web (cần `pnpm install` trước) |
 | `cd apps/web && pnpm test:e2e` | E2E Playwright, 2 test, chạy trên stack đang chạy ở `http://localhost:3000` |
 
-E2E ghi dữ liệu thật vào DB dev (đơn, sổ cái, kết thúc sự kiện) nên **chỉ chạy được một lần trên DB seed sạch**. Đặt lại DB (**lệnh phá huỷ: xoá toàn bộ dữ liệu dev**):
+E2E ghi dữ liệu thật vào DB dev (đơn, sổ cái, kết thúc sự kiện) nên **chỉ chạy được một lần trên DB seed sạch**. Đã chạy xanh nguyên file một lần trên DB seed sạch: 2 passed (10,5 giây). Thứ tự trong file là test bottom sheet mobile chạy trước luồng chính: luồng chính kết thúc sự kiện Mùa Thu nên làm nút "Chọn" bị khoá, vì vậy chạy riêng test mobile sau luồng chính sẽ đỏ vì lý do đó, không phải lỗi app. Sau lần chạy E2E, DB dev không còn là seed sạch. Đặt lại DB (**lệnh phá huỷ: xoá toàn bộ dữ liệu dev**):
 
 ```bash
 docker compose stop api web db && docker compose rm -f api web db && docker volume rm ticket_pgdata
@@ -169,7 +169,7 @@ Danh sách theo thứ tự ưu tiên (a-b quan trọng nhất).
 
 **Quy trình.** Tôi dùng Claude Code làm điều phối viên (orchestrator) và giao việc cho các agent chuyên biệt, mỗi agent một vai: `requirement-analyst`, `business-analyst`, `architect`, `implementer`, `code-reviewer`, `security-reviewer`, `ui-reviewer`, `qa-functional`, `test-engineer`, `devops`, `git-manager`. Luồng: requirements, functional spec, kiến trúc / tech stack / database (đều là file trong `specs/`), rồi implement từng lát (api trước, web sau), review, vòng sửa (fix-loop) cho tới khi hết lỗi mức NGHIÊM TRỌNG và CẢNH BÁO. Sau đó viết test, làm mutation check thủ công (phá có chủ đích một đoạn code tiền để xem test có bắt được không; các image `*-mut*` ở mục 4j là dấu vết), và QA chức năng trên trình duyệt thật. Quy tắc điều phối nằm ở `CLAUDE.md`, `ORCHESTRATION.md`.
 
-**Thống kê có thật**: 23 commit trên nhánh `main` (`git log --oneline | wc -l`); 379 test api, 288 test Vitest web, 2 E2E, 215 test case QA (nguồn số liệu: xem mục Tóm tắt).
+**Thống kê có thật**: lịch sử commit xem bằng `git log --oneline`; 379 test api, 288 test Vitest web, 2 E2E, 215 test case QA (111 PASS / 19 PARTIAL / 85 PENDING) (nguồn số liệu: xem mục Tóm tắt).
 
 **Lỗi thật mà review / test bắt được** (còn dấu vết trong specs hoặc git log):
 
