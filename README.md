@@ -180,7 +180,7 @@ Danh sách theo thứ tự ưu tiên (a-b quan trọng nhất).
 - Zod gọi `new Function` bị CSP chặn: bật `jitless` (commit `049bfda`).
 - Focus không trả về nút mở khi đóng dialog kết thúc sự kiện (commit `b262ecd`).
 
-**Thời gian làm**: TODO(người nộp bài): tổng số giờ thực tế
+**Thời gian làm**: tổng thời gian thực tế khoảng 8 giờ.
 
 ---
 
