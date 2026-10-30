@@ -6,8 +6,8 @@ Lát cắt mỏng của sàn bán lại vé sự kiện: chọn vé, thanh toán
 
 - **Làm gì**: trang sự kiện dựng từ máy chủ, giữ chỗ 15 phút, chuyển sang VNPay, trang kết quả hiện trạng thái thật của đơn, xử lý IPN có chữ ký, sổ cái kép, số dư đang chờ / khả dụng, kết thúc sự kiện.
 - **Stack**: Next.js 16 (`apps/web`, SSR + BFF) + Fastify 5 (`apps/api`) + PostgreSQL 18; hai app standalone, chạy bằng Docker Compose.
-- **Kiểm thử hiện có**: api 379 test (Vitest, Postgres thật), web 288 test Vitest + 2 E2E Playwright, 215 test case QA chức năng trong [`specs/test-cases/web.md`](specs/test-cases/web.md) (111 PASS, 0 FAIL, 19 PARTIAL, 85 PENDING). 2 E2E Playwright chạy xanh nguyên file trên DB seed sạch (2 passed, 10,5 giây, một lần duy nhất, không retry). Số test api (379) / web Vitest (288) lấy từ lần chạy gần nhất trong quá trình làm, tôi không chạy lại khi viết README này.
-- **Chưa thử với VNPay sandbox thật** (xem mục 4): mọi kiểm thử dùng khoá giả + script gửi IPN tự ký.
+- **Kiểm thử hiện có**: api 379 test (Vitest, Postgres thật), web 301 test Vitest (25 file) + 2 E2E Playwright, 218 test case QA chức năng trong [`specs/test-cases/web.md`](specs/test-cases/web.md) (204 PASS, 0 FAIL, 6 PARTIAL, 8 PENDING; không có FAIL do app). 2 E2E Playwright chạy xanh nguyên file trên DB seed sạch (2 passed, 10,5 giây, một lần duy nhất, không retry). Số web Vitest (301) là kết quả `pnpm test` mới nhất; số test api (379) lấy từ lần chạy trước, tôi không chạy lại khi viết README này.
+- **Đã thanh toán thật vài lần qua VNPay sandbox** bằng thẻ NCB test: đơn lên `PAID` qua return URL, sổ cái ghi đúng bút toán. **Chưa kiểm chứng**: IPN thật từ VNPay (chưa có tunnel trong lần chạy thật; IPN chỉ thử bằng script `send-ipn` tự ký) và `querydr` có chữ ký (sandbox luôn trả lỗi 99 không ký). Xem mục 2 và 4.
 - **Trạng thái**: đủ các hạng mục của brief; chưa sẵn sàng production (mục 4).
 
 ---
@@ -56,17 +56,19 @@ Người mua được chuyển tới `sandbox.vnpayment.vn`, trả bằng thẻ 
 
 ### Callback của cổng tới máy local thế nào
 
-**Mặc định không cần tunnel.** Ba đường ghi nhận thanh toán cùng gọi một hàm idempotent `PaymentRecorder.record()`:
+**Không có tunnel thì vẫn thanh toán được, miễn người mua quay lại qua return URL; nên bật tunnel để IPN bù khi họ không quay lại.** Ba đường ghi nhận thanh toán cùng gọi một hàm idempotent `PaymentRecorder.record()`:
 
 | Đường | Khi nào chạy | Cần tunnel? |
 |---|---|---|
 | Return URL (VNPay chuyển trình duyệt về `/don-hang/<mã đơn>?vnp_*`) | người mua quay lại; `web` chuyển tiếp tham số có chữ ký tới `api`, chữ ký sai thì bỏ qua | không |
-| `querydr` (api hỏi VNPay) | mỗi lần xem đơn còn `PENDING_PAYMENT`, trang kết quả hỏi lại mỗi 3 giây | không (api gọi ra ngoài) |
-| IPN (VNPay gọi `GET /api/v1/payments/vnpay/ipn`) | VNPay chủ động | có, vì VNPay phải gọi vào máy bạn |
+| `querydr` (api hỏi VNPay) | mỗi lần xem đơn còn `PENDING_PAYMENT`, trang kết quả hỏi lại mỗi 3 giây | không (api gọi ra ngoài), **nhưng trên sandbox không dùng được**: luôn trả 99 không ký, api từ chối (fail-closed), đơn không đổi trạng thái, log `querydr.failed` |
+| IPN (VNPay gọi `GET /api/v1/payments/vnpay/ipn`) | VNPay chủ động | có, vì VNPay phải gọi vào máy bạn; chưa từng được VNPay gọi thật vào hệ thống |
+
+**Hệ quả trên sandbox:** `querydr` không phải lưới an toàn. Nếu người mua nhập OTP xong mà đóng tab trước khi quay về và không có IPN, đơn giữ `PENDING_PAYMENT` rồi `EXPIRED` sau 15 phút dù VNPay đã trừ tiền (không tự chuyển sang `REFUND_REQUIRED`). Cách giảm thiểu: bật tunnel để IPN bù.
 
 Giao dịch tới từ nhiều đường chỉ ghi sổ một lần (xem mục 3). Trang kết quả luôn hiển thị trạng thái đọc từ hệ thống, không tin tham số trên URL.
 
-**Tunnel ngrok (tuỳ chọn)** để nhận IPN thật:
+**Tunnel ngrok (khuyên bật khi chấm)** để nhận IPN thật:
 
 1. Lấy `NGROK_AUTHTOKEN` và một dev domain cố định (`NGROK_DOMAIN`, không kèm `https://`) trên dashboard ngrok, điền vào `.env`.
 2. `docker compose --profile tunnel up -d` (service `tunnel` trỏ vào `api:8080`).
@@ -108,14 +110,16 @@ Tên volume `ticket_pgdata` suy ra từ `name: ticket` trong `docker-compose.yml
 Lý do (từ `specs/requirements.md` § Điểm Cần Làm Rõ, `specs/tech-stack.md`):
 
 - Phù hợp người dùng Việt Nam và VND; sandbox công khai, có thẻ test NCB.
-- Có đủ ba đường xác nhận mà brief cần: return URL có chữ ký, IPN ký HMAC-SHA512, API tra cứu giao dịch `querydr`. `querydr` cho phép chạy không cần tunnel.
+- Có đủ ba đường xác nhận mà brief cần: return URL có chữ ký, IPN ký HMAC-SHA512, API tra cứu giao dịch `querydr`. Về lý thuyết `querydr` cho phép chạy không cần tunnel, nhưng trên sandbox endpoint này lỗi (xem dưới).
 - Ứng viên khác trong specs là MoMo test và PayOS; specs chỉ liệt kê, không có so sánh sâu hơn nên tôi không bịa thêm.
 
-**Chưa kiểm với sandbox thật** (đã dựng theo tài liệu VNPay, test bằng khoá giả):
+**Đã kiểm với sandbox thật:** thanh toán thật bằng thẻ NCB test, VNPay chấp nhận URL thanh toán đã ký, đơn lên `PAID` qua return URL (không cần IPN) và sổ cái ghi đúng bút toán.
 
-- Chuỗi ký request / response của `querydr` (nối bằng `|`, đúng thứ tự trường theo tài liệu).
-- `vnp_IpAddr` khi chạy local là `127.0.0.1` (lấy từ header request).
-- Việc VNPay chấp nhận URL thanh toán đã ký và thực sự gọi IPN theo định dạng giả định. Phần verify chữ ký có thử hai kiểu chuỗi ký (có / không có tham số rỗng) vì mẫu code của VNPay không thống nhất.
+**Chưa kiểm chứng** (đã dựng theo tài liệu VNPay, test bằng khoá giả):
+
+- IPN thật từ VNPay: chưa từng được gọi vào hệ thống (lần chạy thật không có tunnel); IPN chỉ được kiểm bằng script `send-ipn` giả lập. Phần verify chữ ký có thử hai kiểu chuỗi ký (có / không có tham số rỗng) vì mẫu code của VNPay không thống nhất.
+- `querydr` có chữ ký: endpoint sandbox luôn trả HTTP 200 `{"vnp_ResponseCode":"99","vnp_Message":"Unexpected error"}` không chữ ký cho mọi request (đo 12 biến thể, kể cả đơn thật đã trả, đơn không tồn tại, TMN sai, hash sai; hai trường hợp sau lẽ ra phải ra 97 / 02 nên lỗi nằm ở phía VNPay). Code fail-closed nên đơn không đổi trạng thái. Chuỗi ký response 15 trường (nối bằng `|`, theo thứ tự trong tài liệu) vì vậy chưa từng được kiểm bằng phản hồi thật.
+- `vnp_IpAddr` khi chạy local là `127.0.0.1` (lấy từ header request): chỉ biết là cổng không báo lỗi.
 
 ---
 
@@ -127,7 +131,7 @@ Chi tiết ở [`specs/requirements.md`](specs/requirements.md) § Điểm Cần
 |---|---|---|
 | Giữ chỗ khi chờ thanh toán | 15 phút, không gia hạn. Hết hạn bằng job `croner` mỗi 60 giây và cả khi đọc (đơn quá hạn được cập nhật tại chỗ). Vé còn lại luôn tính từ đơn nên hết hạn có hiệu lực đúng giây thứ 900 dù job chưa chạy | Khớp `vnp_ExpireDate` của VNPay; không cần bảng giữ chỗ riêng, không cột "đã bán / đang giữ" có thể lệch |
 | Tiền đến sau khi đơn hết hạn | Vẫn ghi nhận. Còn vé thì đơn thành `PAID`; hết vé hoặc sự kiện đã kết thúc thì `REFUND_REQUIRED`, tiền vào `BUYER_REFUND_PAYABLE` (hiện ở số dư khả dụng của người mua) | Tiền cổng đã xác nhận không được rơi khỏi sổ cái. Không có hoàn tiền thật (mục 4h) |
-| Ba nguồn xác nhận trùng nhau | IPN, return, `querydr` dùng chung `PaymentRecorder.record()`. Chống ghi trùng 3 lớp: kiểm dưới khoá đơn, UNIQUE partial `payment_transactions.gateway_txn_no`, UNIQUE `ledger_transactions.idempotency_key = PAYMENT:<vnp_TransactionNo>`. Idempotency theo `vnp_TransactionNo` | Chạy được không cần tunnel; tới trước hay tới sau đều ra cùng kết quả; lớp 2-3 là chốt cuối khi code sai |
+| Ba nguồn xác nhận trùng nhau | IPN, return, `querydr` dùng chung `PaymentRecorder.record()`. Chống ghi trùng 3 lớp: kiểm dưới khoá đơn, UNIQUE partial `payment_transactions.gateway_txn_no`, UNIQUE `ledger_transactions.idempotency_key = PAYMENT:<vnp_TransactionNo>`. Idempotency theo `vnp_TransactionNo` | Return URL đủ để chạy không cần tunnel (đã thử thật); tới trước hay tới sau đều ra cùng kết quả; lớp 2-3 là chốt cuối khi code sai |
 | Chống bán quá vé | Số còn lại tính từ `orders`; tạo đơn và ghi nhận thanh toán đều khoá `listings FOR UPDATE`. Không có lối tắt "đơn còn hạn thì `PAID`" | Đồng hồ `now()` của transaction có thể cũ hơn lúc lấy được khoá; chi tiết ở `specs/database.md` § Chống bán trùng |
 | Làm tròn phí | Phí tính trên tổng dòng (giá x số lượng), làm tròn xuống; phần lẻ thuộc sàn. Ví dụ 333.333 x 1: người mua 366.666, người bán 316.667, sàn 49.999 | Tổng luôn cân; sàn giữ phần chênh |
 | Khi nào phí sàn thành doanh thu | Lúc thanh toán chỉ vào `ESCROW_FEE`; kết thúc sự kiện mới chuyển sang `PLATFORM_FEE_REVENUE` | Nếu sự kiện huỷ thì hoàn được toàn bộ cho người mua |
@@ -149,19 +153,19 @@ Danh sách theo thứ tự ưu tiên (a-b quan trọng nhất).
 
 | # | Hạng mục | Chi tiết |
 |---|---|---|
-| a | Chưa thử với VNPay sandbox thật | Chuỗi ký response `querydr`, `vnp_IpAddr=127.0.0.1`, URL thanh toán chưa được VNPay xác nhận. Mọi kiểm thử dùng khoá giả + `send-ipn` |
+| a | Mới thử một phần với VNPay sandbox thật | Đã kiểm thật: thanh toán qua return URL, sổ cái đúng. Chưa kiểm: IPN thật từ VNPay (chỉ thử bằng `send-ipn`), `querydr` có chữ ký, `vnp_IpAddr=127.0.0.1` (chỉ biết cổng không báo lỗi) |
 | b | Không có xác thực / phân quyền | Khu Quản Trị mở cho mọi người; `X-User-Id` giả được. **Bật tunnel thì toàn bộ `/api` lộ ra Internet.** Ai biết mã đơn đều lấy được URL thanh toán; người khác có thể mở phiên VNPay của đơn rồi huỷ, đơn thành `FAILED` |
 | c | Giữ chỗ hàng loạt | Không giới hạn số đơn `PENDING_PAYMENT` hay số vé mỗi đơn, không rate limit; một người có thể giữ hết vé của tin trong 15 phút |
-| d | Không có job đối soát `querydr` định kỳ | Không có IPN và không ai mở đơn thì tiền chưa được ghi nhận; `querydr` chỉ chạy khi có người xem đơn |
+| d | `querydr` trên sandbox luôn lỗi 99 không ký; không có job đối soát định kỳ | Lưới an toàn khi mất IPN chưa được kiểm chứng với phản hồi thật. Không có IPN và người mua đóng tab trước khi quay về thì đơn `EXPIRED` sau 15 phút dù tiền đã bị trừ. Bước tiếp theo: nhờ VNPay bật `querydr` cho TMN sandbox hoặc thử trên môi trường production-like, chạy job đối soát định kỳ; người chấm nên bật tunnel để IPN hoạt động |
 | e | DB chưa tách quyền | Một superuser; chưa có role `app_owner` / `app_runtime`; chưa đặt `lock_timeout` / `statement_timeout`; chưa có trigger chặn ghi tiền vào ký quỹ của sự kiện đã kết thúc ở tầng DB (hiện chỉ code đảm bảo) |
 | f | `GET /v1/ledger` không scale | Cộng toàn bộ sổ mỗi lần gọi, không phân trang tài khoản; khi lớn cần snapshot số dư theo mốc |
 | g | Không CI/CD, deploy, backup, giám sát | Chỉ chạy local. Sentry / APM / alert là việc tiếp theo |
 | h | Chưa hoàn tiền thật | `REFUND_REQUIRED` và huỷ sự kiện mới chỉ ghi khoản phải trả (`BUYER_REFUND_PAYABLE`), không gọi API hoàn tiền của cổng |
 | i | Hai chỗ dễ vỡ ở `web` | `POST /bff/orders` đọc body không giới hạn kích thước. Quên `import '@/lib/zod-config'` ở module schema mới sẽ làm lại lỗi CSP chặn `eval` của Zod |
 | j | Rác trên máy dev | Image Docker nháp từ kiểm thử đột biến còn trên máy tôi (`docker image ls \| grep mut`), không nằm trong repo |
-| k | 86 test case QA còn PENDING | Xem `specs/test-cases/web.md`: không giả lập được lỗi mạng, timeout, luồng cổng thật |
+| k | 14 test case QA chưa PASS (6 PARTIAL, 8 PENDING) | Xem `specs/test-cases/web.md`: cần xoá / nạp lại seed (không được phép), lỗi `api` phía máy chủ không giả lập được ở trình duyệt, `api` treo 15 giây không giả lập được, trang 2 của sổ cái không đủ dữ liệu |
 
-**Bước tiếp theo** (theo thứ tự): thử trọn luồng với sandbox thật; đăng nhập thật + phân quyền Khu Quản Trị và chỉ mở route IPN ra ngoài; job đối soát `querydr`; rate limit + giới hạn giữ chỗ; role DB least-privilege và timeout; hoàn tiền thật; CI/CD; giám sát.
+**Bước tiếp theo** (theo thứ tự): kiểm IPN thật (bật tunnel) và `querydr` có chữ ký với VNPay (mục d); đăng nhập thật + phân quyền Khu Quản Trị và chỉ mở route IPN ra ngoài; job đối soát `querydr`; rate limit + giới hạn giữ chỗ; role DB least-privilege và timeout; hoàn tiền thật; CI/CD; giám sát.
 
 ---
 
@@ -169,7 +173,7 @@ Danh sách theo thứ tự ưu tiên (a-b quan trọng nhất).
 
 **Quy trình.** Tôi dùng Claude Code làm điều phối viên (orchestrator) và giao việc cho các agent chuyên biệt, mỗi agent một vai: `requirement-analyst`, `business-analyst`, `architect`, `implementer`, `code-reviewer`, `security-reviewer`, `ui-reviewer`, `qa-functional`, `test-engineer`, `devops`, `git-manager`. Luồng: requirements, functional spec, kiến trúc / tech stack / database (đều là file trong `specs/`), rồi implement từng lát (api trước, web sau), review, vòng sửa (fix-loop) cho tới khi hết lỗi mức NGHIÊM TRỌNG và CẢNH BÁO. Sau đó viết test, làm mutation check thủ công (phá có chủ đích một đoạn code tiền để xem test có bắt được không; các image `*-mut*` ở mục 4j là dấu vết), và QA chức năng trên trình duyệt thật. Quy tắc điều phối nằm ở `CLAUDE.md`, `ORCHESTRATION.md`.
 
-**Thống kê có thật**: lịch sử commit xem bằng `git log --oneline`; 379 test api, 288 test Vitest web, 2 E2E, 215 test case QA (111 PASS / 19 PARTIAL / 85 PENDING) (nguồn số liệu: xem mục Tóm tắt).
+**Thống kê có thật**: lịch sử commit xem bằng `git log --oneline`; 379 test api, 301 test Vitest web, 2 E2E, 218 test case QA (204 PASS / 0 FAIL / 6 PARTIAL / 8 PENDING) (nguồn số liệu: xem mục Tóm tắt).
 
 **Lỗi thật mà review / test bắt được** (còn dấu vết trong specs hoặc git log):
 
